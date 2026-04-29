@@ -22,6 +22,7 @@
 from __future__ import annotations
 
 import base64
+import email.utils
 import hashlib
 import json
 import os
@@ -59,6 +60,12 @@ class HttpCacheEntry:
     etag: str | None = None
     last_modified: str | None = None
     stored_at: float = 0.0
+    expires_at: float | None = None
+    vary_key: str | None = None
+
+    def is_fresh(self, now: float | None = None) -> bool:
+        now = now or time.time()
+        return self.expires_at is not None and now < self.expires_at
 
     def conditional_headers(self) -> dict[str, str]:
         h: dict[str, str] = {}
@@ -69,13 +76,22 @@ class HttpCacheEntry:
         return h
 
 
-def _http_path(cache_dir: Path, url: str) -> Path:
-    return cache_dir / "http" / f"{_sha(url)}.json"
+def _http_key(url: str, vary_key: str | None = None) -> str:
+    return _sha(f"{url}|vary={vary_key or ''}")
 
 
-def get_http(url: str, cache_dir: Path | None = None) -> HttpCacheEntry | None:
+def _http_path(cache_dir: Path, url: str, vary_key: str | None = None) -> Path:
+    return cache_dir / "http" / f"{_http_key(url, vary_key)}.json"
+
+
+def get_http(
+    url: str,
+    cache_dir: Path | None = None,
+    *,
+    vary_key: str | None = None,
+) -> HttpCacheEntry | None:
     cache_dir = cache_dir or _default_cache_dir()
-    p = _http_path(cache_dir, url)
+    p = _http_path(cache_dir, url, vary_key)
     if not p.is_file():
         return None
     try:
@@ -89,6 +105,8 @@ def get_http(url: str, cache_dir: Path | None = None) -> HttpCacheEntry | None:
             etag=raw.get("etag"),
             last_modified=raw.get("last_modified"),
             stored_at=float(raw.get("stored_at", 0.0)),
+            expires_at=raw.get("expires_at"),
+            vary_key=raw.get("vary_key"),
         )
     except (json.JSONDecodeError, OSError, KeyError):
         return None
@@ -96,7 +114,7 @@ def get_http(url: str, cache_dir: Path | None = None) -> HttpCacheEntry | None:
 
 def put_http(entry: HttpCacheEntry, cache_dir: Path | None = None) -> None:
     cache_dir = cache_dir or _default_cache_dir()
-    p = _http_path(cache_dir, entry.url)
+    p = _http_path(cache_dir, entry.url, entry.vary_key)
     p.parent.mkdir(parents=True, exist_ok=True)
     payload = {
         "url": entry.url,
@@ -107,12 +125,14 @@ def put_http(entry: HttpCacheEntry, cache_dir: Path | None = None) -> None:
         "etag": entry.etag,
         "last_modified": entry.last_modified,
         "stored_at": entry.stored_at or time.time(),
+        "expires_at": entry.expires_at,
+        "vary_key": entry.vary_key,
     }
     p.write_text(json.dumps(payload, ensure_ascii=False), encoding="utf-8")
 
 
-def invalidate_http(url: str, cache_dir: Path | None = None) -> None:
-    p = _http_path(cache_dir or _default_cache_dir(), url)
+def invalidate_http(url: str, cache_dir: Path | None = None, *, vary_key: str | None = None) -> None:
+    p = _http_path(cache_dir or _default_cache_dir(), url, vary_key)
     try:
         p.unlink(missing_ok=True)
     except OSError:
@@ -130,8 +150,20 @@ def make_extract_key(
     render_mode: str,
     adapter_version: str = "v1",
     extractor_profile: str = "adapter",
+    include_references: bool = True,
+    clean_rules: list[str] | None = None,
+    flags: dict[str, Any] | None = None,
 ) -> str:
-    raw = f"{url}|rm={render_mode}|ad={adapter_version}|prof={extractor_profile}"
+    payload = {
+        "url": url,
+        "render_mode": render_mode,
+        "adapter_version": adapter_version,
+        "extractor_profile": extractor_profile,
+        "include_references": include_references,
+        "clean_rules": clean_rules or [],
+        "flags": flags or {},
+    }
+    raw = json.dumps(payload, sort_keys=True, ensure_ascii=False)
     return _sha(raw)
 
 
@@ -185,3 +217,38 @@ def enabled() -> bool:
 
 def cache_dir() -> Path:
     return _default_cache_dir()
+
+
+def vary_key_from_headers(headers: dict[str, str]) -> str:
+    """计算简化版 Vary key：纳入会影响 HTML 内容的常见请求头。"""
+    keys = ("accept", "accept-language", "user-agent")
+    normalized = {k: headers.get(k, headers.get(k.title(), "")) for k in keys}
+    return _sha(json.dumps(normalized, sort_keys=True))
+
+
+def response_cache_policy(headers: dict[str, str], *, now: float | None = None) -> tuple[bool, float | None]:
+    """解析最小缓存策略，返回 (should_store, expires_at)。
+
+    支持：Cache-Control: no-store / max-age=N，以及 Expires。
+    """
+    now = now or time.time()
+    cc = headers.get("cache-control", headers.get("Cache-Control", "")).lower()
+    if "no-store" in cc:
+        return False, None
+    for part in cc.split(","):
+        part = part.strip()
+        if part.startswith("max-age="):
+            try:
+                seconds = int(part.split("=", 1)[1])
+                return True, now + max(0, seconds)
+            except ValueError:
+                break
+    exp = headers.get("expires", headers.get("Expires"))
+    if exp:
+        try:
+            dt = email.utils.parsedate_to_datetime(exp)
+            return True, dt.timestamp()
+        except (TypeError, ValueError, IndexError):
+            pass
+    # 默认保守：条件请求缓存，不视为 fresh；下次会带 ETag/Last-Modified revalidate。
+    return True, None

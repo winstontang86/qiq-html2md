@@ -28,6 +28,7 @@ browser = [
 
 [project.scripts]
 html2md-skill = "html2md_skill.__main__:main"
+html2md-skill-build = "html2md_skill.build:main"
 
 [build-system]
 requires = ["hatchling>=1.24"]

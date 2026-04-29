@@ -42,6 +42,37 @@ def test_browser_pool_shutdown_safe_without_browser() -> None:
     assert pool.stats()["active_contexts"] == 0
 
 
+def test_browser_pool_zero_idle_timeout_closes_after_context() -> None:
+    class FakeContext:
+        def __init__(self) -> None:
+            self.closed = False
+
+        def close(self) -> None:
+            self.closed = True
+
+    class FakeBrowser:
+        def __init__(self) -> None:
+            self.closed = False
+            self.context = FakeContext()
+
+        def new_context(self, **_: object) -> FakeContext:
+            return self.context
+
+        def close(self) -> None:
+            self.closed = True
+
+    pool = BrowserPool(idle_timeout=0)
+    browser = FakeBrowser()
+    pool._browser = browser  # type: ignore[attr-defined]  # 测试内部状态
+
+    with pool.context() as ctx:
+        assert ctx is browser.context
+
+    assert browser.context.closed is True
+    assert browser.closed is True
+    assert pool.stats()["closes"] == 1
+
+
 # ---------------------------------------------------------------------------
 # cache
 # ---------------------------------------------------------------------------

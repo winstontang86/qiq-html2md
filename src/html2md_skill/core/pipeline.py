@@ -151,12 +151,12 @@ def _delta_effective(delta: dict[str, Any], strategy: dict[str, Any]) -> bool:
 def run(request: SkillRequest, *, allow_file_scheme: bool = False) -> SkillResponse:
     """主入口：执行 skill。"""
     trace_id = new_trace_id()
-    output_dir = FsSandbox(request.output_dir).root  # 创建输出目录
-    diag_dir = output_dir / "_diag"
-    bus = EventBus(trace_id=trace_id, diag_dir=diag_dir)
-
     budget = new_default_budget(request.timeout_seconds)
     ctx = Context.new(request, trace_id=trace_id, deadline_ts=budget.deadline_ts)
+    # output_dir 以 Context 为准，确保 idempotency_key 生效。
+    ctx.output_dir = FsSandbox(str(ctx.output_dir)).root
+    diag_dir = ctx.output_dir / "_diag"
+    bus = EventBus(trace_id=trace_id, diag_dir=diag_dir)
 
     bus.emit(
         "skill.started",
@@ -201,7 +201,7 @@ def run(request: SkillRequest, *, allow_file_scheme: bool = False) -> SkillRespo
                                     "stage": stage.name,
                                     "duration_ms": 0,
                                     "level": "error",
-                                    "error": repr(re),
+                                    "error": _safe_error(re, request.debug),
                                     "reason": re.payload.get("reason"),
                                 },
                             )
@@ -209,13 +209,15 @@ def run(request: SkillRequest, *, allow_file_scheme: bool = False) -> SkillRespo
                         except FatalError:
                             raise
                         ctx.apply(result)
+                        if request.preserve_intermediate:
+                            _write_intermediate(diag_dir, result)
                         budget.release_unused(stage.name)
                         bus.emit(
                             "stage.finished",
                             {
                                 "stage": stage.name,
                                 "duration_ms": result.duration_ms,
-                                "stats": result.output.get(f"{stage.name}_stats", {}),
+                                "stats": _stage_stats(result),
                             },
                         )
             except RetryableError as re:
@@ -264,13 +266,13 @@ def run(request: SkillRequest, *, allow_file_scheme: bool = False) -> SkillRespo
                 break
 
     except FatalError as fe:
-        last_error = repr(fe)
+        last_error = _safe_error(fe, request.debug)
         final_status = "degraded" if ctx.emit else "failed"
     except SkillError as se:
-        last_error = repr(se)
+        last_error = _safe_error(se, request.debug)
         final_status = "failed"
     except Exception as e:  # noqa: BLE001
-        last_error = repr(e)
+        last_error = _safe_error(e, request.debug)
         final_status = "failed"
     finally:
         duration_ms = int((time.monotonic() - t_run0) * 1000)
@@ -281,9 +283,11 @@ def run(request: SkillRequest, *, allow_file_scheme: bool = False) -> SkillRespo
             "duration_ms": duration_ms,
             "retries": attempts,
             "retry_reasons": [r.reason for r in ctx.retry_history],
+            "idempotency_key": request.idempotency_key,
             "budget": budget.stats(),
         }
         write_metrics(diag_dir / "metrics.json", metrics_data)
+        _write_warnings_fallback(ctx)
         # 把指标广播给已注册的 exporter（OTel/Prometheus 等）
         try:
             metrics_export(metrics_data)
@@ -313,6 +317,64 @@ def run(request: SkillRequest, *, allow_file_scheme: bool = False) -> SkillRespo
         duration_ms=duration_ms,
         attempts=len(ctx.retry_history),
     )
+
+
+def _stage_stats(result: Any) -> dict[str, Any]:
+    key_by_stage = {
+        "acquire": "page_stats",
+        "extract": "extract_stats",
+        "enrich": "enrich_stats",
+        "emit": "emit_stats",
+    }
+    key = key_by_stage.get(result.stage)
+    if not key:
+        return {}
+    stats = result.output.get(key, {})
+    return stats if isinstance(stats, dict) else {}
+
+
+def _safe_error(exc: BaseException, debug: str = "lite") -> str:
+    if isinstance(exc, SkillError):
+        code = str(exc.args[0]) if exc.args else exc.__class__.__name__
+        if debug == "full":
+            return f"{code}: {exc.payload}"
+        return code
+    if debug == "full":
+        return repr(exc)
+    return exc.__class__.__name__
+
+
+def _jsonable(value: Any) -> Any:
+    if isinstance(value, bytes):
+        return {"__bytes__": len(value)}
+    if isinstance(value, dict):
+        return {str(k): _jsonable(v) for k, v in value.items()}
+    if isinstance(value, list):
+        return [_jsonable(v) for v in value]
+    if isinstance(value, tuple):
+        return [_jsonable(v) for v in value]
+    try:
+        json.dumps(value)
+        return value
+    except TypeError:
+        return repr(value)
+
+
+def _write_intermediate(diag_dir: Any, result: Any) -> None:
+    p = diag_dir / "intermediate" / f"{result.stage}.json"
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(
+        json.dumps(_jsonable(result.output), ensure_ascii=False, indent=2),
+        encoding="utf-8",
+    )
+
+
+def _write_warnings_fallback(ctx: Context) -> None:
+    p = ctx.output_dir / "warnings.json"
+    if p.exists():
+        return
+    p.parent.mkdir(parents=True, exist_ok=True)
+    p.write_text(json.dumps(ctx.warnings, ensure_ascii=False, indent=2), encoding="utf-8")
 
 
 def _build_response(

@@ -117,10 +117,20 @@ def get(
     if headers:
         default_headers.update(headers)
 
+    vary_key = cache_mod.vary_key_from_headers(default_headers)
     cache_entry = None
     if use_cache and cache_mod.enabled():
-        cache_entry = cache_mod.get_http(url)
+        cache_entry = cache_mod.get_http(url, vary_key=vary_key)
         if cache_entry is not None:
+            if cache_entry.is_fresh():
+                return HttpResponse(
+                    final_url=cache_entry.final_url,
+                    status_code=200,
+                    headers=cache_entry.headers,
+                    content=cache_entry.content,
+                    encoding=cache_entry.headers.get("content-encoding") or "utf-8",
+                    from_cache=True,
+                )
             default_headers.update(cache_entry.conditional_headers())
 
     try:
@@ -167,18 +177,22 @@ def get(
 
     # 写缓存
     if use_cache and cache_mod.enabled() and resp.status_code == 200:
-        cache_mod.put_http(
-            cache_mod.HttpCacheEntry(
-                url=url,
-                final_url=result.final_url,
-                status=result.status_code,
-                headers=result.headers,
-                content=result.content,
-                etag=result.headers.get("etag"),
-                last_modified=result.headers.get("last-modified"),
-                stored_at=time.time(),
+        should_store, expires_at = cache_mod.response_cache_policy(result.headers, now=time.time())
+        if should_store:
+            cache_mod.put_http(
+                cache_mod.HttpCacheEntry(
+                    url=url,
+                    final_url=result.final_url,
+                    status=result.status_code,
+                    headers=result.headers,
+                    content=result.content,
+                    etag=result.headers.get("etag"),
+                    last_modified=result.headers.get("last-modified"),
+                    stored_at=time.time(),
+                    expires_at=expires_at,
+                    vary_key=vary_key,
+                )
             )
-        )
 
     return result
 

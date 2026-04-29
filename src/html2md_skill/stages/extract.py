@@ -25,28 +25,13 @@ from html2md_skill.adapters_site.base import resolve as resolve_adapter
 from html2md_skill.core.errors import RetryableError
 from html2md_skill.core.types import Context, StageResult
 from html2md_skill.infra import cache as cache_mod
+from html2md_skill.infra.html_attrs import class_str
 
 _DEFAULT_JUNK_TAGS = (
     "script", "style", "noscript", "nav", "aside", "header", "footer", "form", "iframe",
 )
 
 _LOOSE_JUNK_TAGS = ("script", "style", "noscript", "iframe")
-
-
-def _class_str(t: Tag) -> str:
-    """把 tag.class 归一为空格连接的字符串，避免 bs4 新版的 Union 类型麻烦。"""
-    raw = t.get("class")
-    if isinstance(raw, str):
-        return raw
-    if isinstance(raw, list):
-        return " ".join(str(x) for x in raw)
-    if raw is None:
-        return ""
-    # AttributeValueList 类似 list 可迭代
-    try:
-        return " ".join(str(x) for x in raw)
-    except TypeError:
-        return str(raw)
 
 
 class ExtractStage:
@@ -74,6 +59,9 @@ class ExtractStage:
             render_mode=ctx.acquire.get("render_mode_used", "static"),
             adapter_version=adapter.name + ":v1",
             extractor_profile=profile,
+            include_references=ctx.request.include_references,
+            clean_rules=list(clean_rules),
+            flags=flags,
         )
         if cache_mod.enabled():
             cached = cache_mod.get_extract(cache_key)
@@ -181,7 +169,7 @@ def _clean(soup: BeautifulSoup, *, loose: bool, keep_refs: bool) -> None:
     for t in soup.find_all(True):
         if not isinstance(t, Tag):
             continue
-        cls_lower = _class_str(t).lower()
+        cls_lower = class_str(t).lower()
 
         # refs 区域在 keep_refs 模式下跳过
         if keep_refs and ("bibliograph" in cls_lower or "reference" in cls_lower):

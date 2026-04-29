@@ -29,55 +29,10 @@ from html2md_skill.core.errors import RetryableError
 from html2md_skill.core.types import Context, StageResult
 from html2md_skill.infra import http
 from html2md_skill.infra.fs_sandbox import FsSandbox
+from html2md_skill.infra.html_attrs import class_str, int_attr, str_attr
 
 # DOM 锚点属性名：Emit 据此找到 artifact
 ANCHOR_ATTR = "data-h2m-id"
-
-
-def _class_str(t: Tag) -> str:
-    """把 tag.class 归一为空格连接字符串，避免 bs4 新版 Union 类型告警。"""
-    raw = t.get("class")
-    if isinstance(raw, str):
-        return raw
-    if isinstance(raw, list):
-        return " ".join(str(x) for x in raw)
-    if raw is None:
-        return ""
-    try:
-        return " ".join(str(x) for x in raw)
-    except TypeError:
-        return str(raw)
-
-
-def _int_attr(t: Tag, key: str, default: int = 1) -> int:
-    """把数值属性（如 rowspan/colspan）安全转 int。"""
-    raw = t.get(key)
-    if raw is None:
-        return default
-    if isinstance(raw, str):
-        try:
-            return int(raw)
-        except ValueError:
-            return default
-    if isinstance(raw, int):
-        return raw
-    try:
-        return int(str(raw))
-    except (ValueError, TypeError):
-        return default
-
-
-def _str_attr(t: Tag, key: str, default: str = "") -> str:
-    """把字符串属性安全取为 str（bs4 新版可能返回 AttributeValueList）。"""
-    raw = t.get(key)
-    if raw is None:
-        return default
-    if isinstance(raw, str):
-        return raw
-    try:
-        return " ".join(str(x) for x in raw)
-    except TypeError:
-        return str(raw)
 
 
 class EnrichStage:
@@ -210,7 +165,7 @@ def _extract_refs(
                 continue
             cid = candidate.get("id")
             cid_str = cid if isinstance(cid, str) else ""
-            attrs = f"{cid_str} {_class_str(candidate)}".lower()
+            attrs = f"{cid_str} {class_str(candidate)}".lower()
             if "bibliograph" in attrs or "reference" in attrs:
                 node = candidate
                 break
@@ -269,7 +224,7 @@ def _process_formulas(
         if not isinstance(m, Tag):
             continue
         latex = _find_tex_annotation(m)
-        is_block = _str_attr(m, "display").lower() == "block"
+        is_block = str_attr(m, "display").lower() == "block"
         fid = f"f{len(formulas) + 1:03d}"
         m.attrs[ANCHOR_ATTR] = fid
         if mode == "mathml" or (mode != "latex" and not latex):
@@ -297,7 +252,7 @@ def _process_formulas(
     for s in soup.find_all("script"):
         if not isinstance(s, Tag):
             continue
-        t = _str_attr(s, "type").lower()
+        t = str_attr(s, "type").lower()
         if t not in ("math/tex", "math/tex; mode=display"):
             continue
         tex = s.get_text() or ""
@@ -321,8 +276,8 @@ def _process_formulas(
         if c.get(ANCHOR_ATTR):
             continue
         is_block = (
-            _str_attr(c, "display").lower() == "true"
-            or _str_attr(c, "jax").lower() == "chtml"
+            str_attr(c, "display").lower() == "true"
+            or str_attr(c, "jax").lower() == "chtml"
         )
         fid = f"f{len(formulas) + 1:03d}"
         c.attrs[ANCHOR_ATTR] = fid
@@ -344,7 +299,7 @@ def _find_tex_annotation(math: Tag) -> str | None:
     for ann in math.find_all("annotation"):
         if not isinstance(ann, Tag):
             continue
-        enc = _str_attr(ann, "encoding").lower()
+        enc = str_attr(ann, "encoding").lower()
         if "tex" in enc:
             txt = ann.get_text() or ""
             return txt.strip() or None
@@ -417,8 +372,8 @@ def _table_complexity(table: Tag) -> int:
     for cell in table.find_all(["td", "th"]):
         if not isinstance(cell, Tag):
             continue
-        rs = _int_attr(cell, "rowspan", 1)
-        cs = _int_attr(cell, "colspan", 1)
+        rs = int_attr(cell, "rowspan", 1)
+        cs = int_attr(cell, "colspan", 1)
         if rs > 1:
             rowspan += 1
         if cs > 1:
@@ -488,7 +443,7 @@ def _table_to_markdown(table: Tag) -> str | None:
         for cell in tr.find_all(["td", "th"]):
             if not isinstance(cell, Tag):
                 continue
-            if _int_attr(cell, "rowspan", 1) > 1 or _int_attr(cell, "colspan", 1) > 1:
+            if int_attr(cell, "rowspan", 1) > 1 or int_attr(cell, "colspan", 1) > 1:
                 return None
             if cell.find("table"):
                 return None
@@ -545,7 +500,7 @@ def _process_images(
             continue
 
         abs_url = urljoin(base_url, src)
-        alt = _str_attr(img, "alt").strip()
+        alt = str_attr(img, "alt").strip()
 
         iid = f"i{idx:03d}"
         img.attrs[ANCHOR_ATTR] = iid
@@ -593,13 +548,13 @@ def _process_images(
 
 
 def _best_src(img: Tag) -> str | None:
-    srcset = _str_attr(img, "srcset")
+    srcset = str_attr(img, "srcset")
     if srcset.strip():
         first = srcset.split(",")[0].strip().split(" ")[0]
         if first:
             return first
     for k in ("src", "data-src", "data-original"):
-        v = _str_attr(img, k)
+        v = str_attr(img, k)
         if v.strip():
             return v
     return None
@@ -651,7 +606,7 @@ def _process_inline_svgs(
         idx = start_idx + i
         iid = f"s{idx:03d}"
         svg.attrs[ANCHOR_ATTR] = iid
-        aria = _str_attr(svg, "aria-label").strip() or "svg"
+        aria = str_attr(svg, "aria-label").strip() or "svg"
         items.append(
             {
                 "id": iid,

@@ -12,6 +12,7 @@
 from __future__ import annotations
 
 import json
+import re
 import time
 from typing import Any, Literal
 
@@ -62,26 +63,39 @@ class EmitStage:
 
         # 写文件
         sandbox.write_text("article.md", markdown_text)
-        sandbox.write_text(
-            "metadata.json",
-            json.dumps(metadata, ensure_ascii=False, indent=2),
-        )
+        metadata_path: str | None = None
+        if ctx.request.include_metadata:
+            sandbox.write_text(
+                "metadata.json",
+                json.dumps(metadata, ensure_ascii=False, indent=2),
+            )
+            metadata_path = str(sandbox.resolve("metadata.json"))
         sandbox.write_text(
             "warnings.json",
             json.dumps(ctx.warnings, ensure_ascii=False, indent=2),
         )
 
-        output_partial = {
+        output_partial: dict[str, Any] = {
             "markdown_path": str(sandbox.resolve("article.md")),
             "markdown_text": markdown_text,
             "assets_dir": str(sandbox.resolve("assets")),
-            "metadata_path": str(sandbox.resolve("metadata.json")),
+            "metadata_path": metadata_path,
             "warnings_path": str(sandbox.resolve("warnings.json")),
         }
         ctx.emit = output_partial
 
-        # 质量评分
-        report = quality_mod.evaluate(ctx)
+        # 质量评分；quality_check=False 时仍写一个报告，便于宿主统一读取。
+        if ctx.request.quality_check:
+            report = quality_mod.evaluate(ctx)
+        else:
+            from html2md_skill.core.types import QualityReport
+
+            report = QualityReport(
+                passed=True,
+                final_score=100.0,
+                sub_scores={"quality_check": 100.0},
+                risk_level="low",
+            )
         ctx.quality_report = report
         sandbox.write_text(
             "quality_report.json",
@@ -89,8 +103,13 @@ class EmitStage:
         )
 
         output_partial["quality_report_path"] = str(sandbox.resolve("quality_report.json"))
+        output_partial["emit_stats"] = {
+            "markdown_chars": len(markdown_text),
+            "metadata_written": metadata_path is not None,
+            "quality_checked": ctx.request.quality_check,
+        }
 
-        if not report.passed:
+        if ctx.request.quality_check and not report.passed:
             reason = report.failed_rules[0] if report.failed_rules else "quality_failed"
             raise RetryableError(
                 "quality_failed",
@@ -271,7 +290,11 @@ def _inline(node: Tag, artifacts: dict[str, dict[str, Any]]) -> str:
         else:
             parts.append(_inline(c, artifacts))
     text = " ".join(p.strip() for p in parts if p and p.strip())
-    return text.replace("  \n ", "  \n")
+    text = text.replace("  \n ", "  \n")
+    # 行内元素拼接会在英文标点前产生多余空格：`**B** .` / `[x](u) ,`
+    text = re.sub(r"\s+([,.;:!?\)\]\}])", r"\1", text)
+    text = re.sub(r"([\(\[\{])\s+", r"\1", text)
+    return text
 
 
 def _img_fallback(img: Tag) -> str:

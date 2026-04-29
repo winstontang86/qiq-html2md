@@ -28,6 +28,12 @@ python -m html2md_skill --allow-file-scheme \
 
 # 从 JSON 请求读入
 echo '{"url":"https://arxiv.org/html/2501.xxx","output_dir":"./output"}' | python -m html2md_skill -
+
+# 构建可安装的 skill zip 包（供 agent 宿主分发）
+python -m html2md_skill.build                  # 默认 dist/html2md-skill-<version>.zip
+python -m html2md_skill.build --with-tests     # 附带 tests/
+python -m html2md_skill.build --no-docs        # 不带 docs/
+SOURCE_DATE_EPOCH=1700000000 python -m html2md_skill.build  # 可复现构建（字节级一致）
 ```
 
 ## 关键能力
@@ -93,3 +99,46 @@ _diag/
 - Python 3.10+
 - `ruff`（lint + format）、`mypy --strict`、`pytest`
 - 所有"substantive"工作进 `.workbuddy/memory/YYYY-MM-DD.md`（本地，不入仓）
+
+## Skill 分发包（zip）
+
+`python -m html2md_skill.build` 产出 `dist/html2md-skill-<version>.zip`，供 agent 宿主（WorkBuddy、OpenClaw 等）扫描安装。
+
+### 包内结构
+
+```
+html2md-skill-<version>/
+  SKILL.md               # 宿主发现入口
+  manifest.yaml          # 机读声明（entry / schemas / permissions）
+  README.md · LICENSE
+  requirements.txt       # 运行时依赖（browser 作为注释 extras）
+  dist_info.json         # name/version/built_at/SHA-256 清单
+  schemas/*.json         # request/response JSON Schema
+  src/html2md_skill/**   # 源码
+  docs/**                # 可选
+  tests/**               # 可选（--with-tests）
+```
+
+### 安装方（agent 宿主）典型用法
+
+```bash
+# 1. 解压
+unzip html2md-skill-0.1.0.zip
+cd html2md-skill-0.1.0
+
+# 2. 装依赖
+pip install -r requirements.txt
+# 需要浏览器渲染？
+# pip install 'playwright>=1.45' && playwright install chromium
+
+# 3. 运行
+PYTHONPATH=src python -m html2md_skill --url "..." --output-dir ./out
+```
+
+### 校验
+
+宿主可对比 `dist_info.json` 中每个文件的 `sha256` 与解压后的实际字节，确认包未被篡改。
+
+### 可复现
+
+设置 `SOURCE_DATE_EPOCH` 后，两次构建产出字节级一致的 zip（同一哈希），方便审计与镜像。

@@ -91,9 +91,17 @@ class BrowserPool:
                 ctx.close()
             except Exception:  # noqa: BLE001
                 pass
+            should_close = False
             with self._lock:
                 self._last_use = time.monotonic()
                 self._context_checkouts -= 1
+                should_close = (
+                    self._browser is not None
+                    and self._context_checkouts == 0
+                    and self._idle_timeout <= 0
+                )
+                if should_close:
+                    self._close_locked()
 
     # ------- 空闲清理 -------
 

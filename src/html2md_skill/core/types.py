@@ -13,10 +13,12 @@
 
 from __future__ import annotations
 
+import re
 from pathlib import Path
 from typing import Any, Literal
+from urllib.parse import urlparse
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 # ---------------------------------------------------------------------------
 # enums
@@ -56,6 +58,36 @@ class SkillRequest(BaseModel):
     debug: DebugMode = "lite"
     preserve_intermediate: bool = False
     idempotency_key: str | None = None
+
+    @field_validator("url")
+    @classmethod
+    def _validate_url(cls, v: str) -> str:
+        """模型层做基础 URL 校验；具体 scheme 安全策略仍由 infra/http 决定。"""
+        v = v.strip()
+        if not v:
+            raise ValueError("url must not be empty")
+        p = urlparse(v)
+        if not p.scheme:
+            raise ValueError("url must include a scheme")
+        if p.scheme == "file":
+            if not p.path:
+                raise ValueError("file url must include a path")
+            return v
+        if not p.netloc:
+            raise ValueError("url must include a host")
+        return v
+
+    @field_validator("idempotency_key")
+    @classmethod
+    def _validate_idempotency_key(cls, v: str | None) -> str | None:
+        if v is None:
+            return None
+        v = v.strip()
+        if not v:
+            return None
+        if not re.fullmatch(r"[A-Za-z0-9._-]{1,128}", v):
+            raise ValueError("idempotency_key must match [A-Za-z0-9._-]{1,128}")
+        return v
 
 
 class SkillArtifact(BaseModel):
@@ -187,9 +219,11 @@ class Context(BaseModel):
     @classmethod
     def new(cls, request: SkillRequest, trace_id: str, deadline_ts: float) -> Context:
         """工厂方法：根据 request 初始化 Context。"""
+        base_output = Path(request.output_dir).resolve()
+        output_dir = base_output / request.idempotency_key if request.idempotency_key else base_output
         return cls(
             request=request,
-            output_dir=Path(request.output_dir).resolve(),
+            output_dir=output_dir,
             deadline_ts=deadline_ts,
             trace_id=trace_id,
             strategy=_initial_strategy(request),
@@ -216,9 +250,16 @@ class Context(BaseModel):
         self.quality_report = None
 
     def merge_strategy(self, delta: dict[str, Any]) -> None:
-        """把 delta 合并进当前 strategy（浅合并）。"""
+        """把 delta 合并进当前 strategy；flags 使用深合并避免重试策略互相覆盖。"""
         for k, v in delta.items():
-            self.strategy[k] = v
+            if k == "flags" and isinstance(v, dict):
+                flags = self.strategy.setdefault("flags", {})
+                if isinstance(flags, dict):
+                    flags.update(v)
+                else:
+                    self.strategy["flags"] = dict(v)
+            else:
+                self.strategy[k] = v
 
 
 def _initial_strategy(req: SkillRequest) -> dict[str, Any]:
