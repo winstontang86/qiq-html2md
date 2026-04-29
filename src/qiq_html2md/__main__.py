@@ -1,8 +1,8 @@
-"""CLI 入口：python -m html2md_skill。
+"""CLI 入口：python -m qiq_html2md。
 
 支持两类输入：
-- JSON 请求文件 / stdin：`python -m html2md_skill request.json` 或 `... -`
-- 命令行参数：`python -m html2md_skill --url ... --output-dir ...`
+- JSON 请求文件 / stdin：`python -m qiq_html2md request.json` 或 `... -`
+- 命令行参数：`python -m qiq_html2md --url ... --output-dir ...`
 """
 
 from __future__ import annotations
@@ -12,8 +12,8 @@ import json
 import sys
 from typing import Any
 
-from html2md_skill.core.pipeline import run
-from html2md_skill.core.types import SkillRequest
+from qiq_html2md.core.pipeline import run
+from qiq_html2md.core.types import SkillRequest
 
 
 def _load_request(args: argparse.Namespace) -> SkillRequest:
@@ -50,7 +50,7 @@ def _load_request(args: argparse.Namespace) -> SkillRequest:
 
 
 def main() -> int:
-    parser = argparse.ArgumentParser(prog="html2md-skill", description="HTML → Markdown skill")
+    parser = argparse.ArgumentParser(prog="qiq-html2md", description="HTML → Markdown skill")
     parser.add_argument("request_file", nargs="?", help="JSON 请求文件；'-' 表示从 stdin 读取")
     parser.add_argument("--url", help="直接给 URL（不使用 JSON 文件）")
     parser.add_argument("--output-dir", default=None, help="输出目录")

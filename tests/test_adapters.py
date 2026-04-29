@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from html2md_skill.adapters_site.base import ARXIV, DEFAULT, PMC, resolve
+from qiq_html2md.adapters_site.base import ARXIV, DEFAULT, PMC, resolve
 
 
 def test_resolve_arxiv() -> None:

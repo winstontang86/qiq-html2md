@@ -1,6 +1,6 @@
 # 可观测性规范（v2-final r3）
 
-Observability 贯穿 html2md skill 的四层，本文件规范首版落地细节。
+Observability 贯穿 qiq-html2md 的四层，本文件规范首版落地细节。
 
 **首版范围**：事件流（含日志 + trace + stage 快照 sink） + 指标本地 JSON。不对接 Prometheus / OTel（预留接口）。
 
@@ -60,7 +60,7 @@ class Event:
 ### 3.4 宿主订阅
 
 ```python
-from html2md_skill.obs import EventBus
+from qiq_html2md.obs import EventBus
 EventBus.subscribe(lambda evt: ...)
 ```
 

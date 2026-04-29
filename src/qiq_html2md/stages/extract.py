@@ -21,11 +21,11 @@ from typing import Any, Literal
 from bs4 import BeautifulSoup, Tag
 from readability import Document
 
-from html2md_skill.adapters_site.base import resolve as resolve_adapter
-from html2md_skill.core.errors import RetryableError
-from html2md_skill.core.types import Context, StageResult
-from html2md_skill.infra import cache as cache_mod
-from html2md_skill.infra.html_attrs import class_str
+from qiq_html2md.adapters_site.base import resolve as resolve_adapter
+from qiq_html2md.core.errors import RetryableError
+from qiq_html2md.core.types import Context, StageResult
+from qiq_html2md.infra import cache as cache_mod
+from qiq_html2md.infra.html_attrs import class_str
 
 _DEFAULT_JUNK_TAGS = (
     "script", "style", "noscript", "nav", "aside", "header", "footer", "form", "iframe",

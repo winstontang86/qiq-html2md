@@ -1,4 +1,4 @@
-# html2md-skill
+# qiq-html2md
 
 一个面向论文类 HTML 页面 → Markdown 的通用 skill。可被 WorkBuddy / OpenClaw / CLI / MCP 等智能体宿主复用。
 
@@ -16,24 +16,24 @@ uv sync --extra dev --extra browser
 # 运行测试
 pytest
 ruff check src/ tests/
-mypy --strict src/html2md_skill/
+mypy --strict src/qiq_html2md/
 
 # 端到端（URL）
-python -m html2md_skill --url "https://arxiv.org/html/2501.xxx" --output-dir ./output
+python -m qiq_html2md --url "https://arxiv.org/html/2501.xxx" --output-dir ./output
 
 # 端到端（本地 fixture）
-python -m html2md_skill --allow-file-scheme \
+python -m qiq_html2md --allow-file-scheme \
   --url "file://$(pwd)/tests/fixtures/paper_rich.html" \
   --output-dir ./output
 
 # 从 JSON 请求读入
-echo '{"url":"https://arxiv.org/html/2501.xxx","output_dir":"./output"}' | python -m html2md_skill -
+echo '{"url":"https://arxiv.org/html/2501.xxx","output_dir":"./output"}' | python -m qiq_html2md -
 
 # 构建可安装的 skill zip 包（供 agent 宿主分发）
-python -m html2md_skill.build                  # 默认 dist/html2md-skill-<version>.zip
-python -m html2md_skill.build --with-tests     # 附带 tests/
-python -m html2md_skill.build --no-docs        # 不带 docs/
-SOURCE_DATE_EPOCH=1700000000 python -m html2md_skill.build  # 可复现构建（字节级一致）
+python -m qiq_html2md.build                  # 默认 dist/qiq-html2md-<version>.zip
+python -m qiq_html2md.build --with-tests     # 附带 tests/
+python -m qiq_html2md.build --no-docs        # 不带 docs/
+SOURCE_DATE_EPOCH=1700000000 python -m qiq_html2md.build  # 可复现构建（字节级一致）
 ```
 
 ## 关键能力
@@ -64,7 +64,7 @@ SOURCE_DATE_EPOCH=1700000000 python -m html2md_skill.build  # 可复现构建（
 ## 目录结构
 
 ```
-src/html2md_skill/
+src/qiq_html2md/
   core/          # types / pipeline / context / budget / errors
   stages/        # acquire / extract / enrich / emit
   adapters_site/ # base + arxiv/pmc/jats
@@ -92,7 +92,7 @@ _diag/
 
 ## 环境变量
 
-- `HTML2MD_SKILL_CACHE_DIR`：缓存目录（默认 `$XDG_CACHE_HOME/html2md-skill` 或 `~/.cache/html2md-skill`）。
+- `QIQ_HTML2MD_CACHE_DIR`：缓存目录（默认 `$XDG_CACHE_HOME/qiq-html2md` 或 `~/.cache/qiq-html2md`）。
 
 ## 开发约定
 
@@ -102,19 +102,19 @@ _diag/
 
 ## Skill 分发包（zip）
 
-`python -m html2md_skill.build` 产出 `dist/html2md-skill-<version>.zip`，供 agent 宿主（WorkBuddy、OpenClaw 等）扫描安装。
+`python -m qiq_html2md.build` 产出 `dist/qiq-html2md-<version>.zip`，供 agent 宿主（WorkBuddy、OpenClaw 等）扫描安装。
 
 ### 包内结构
 
 ```
-html2md-skill-<version>/
+qiq-html2md-<version>/
   SKILL.md               # 宿主发现入口
   manifest.yaml          # 机读声明（entry / schemas / permissions）
   README.md · LICENSE
   requirements.txt       # 运行时依赖（browser 作为注释 extras）
   dist_info.json         # name/version/built_at/SHA-256 清单
   schemas/*.json         # request/response JSON Schema
-  src/html2md_skill/**   # 源码
+  src/qiq_html2md/**   # 源码
   docs/**                # 可选
   tests/**               # 可选（--with-tests）
 ```
@@ -123,8 +123,8 @@ html2md-skill-<version>/
 
 ```bash
 # 1. 解压
-unzip html2md-skill-0.1.0.zip
-cd html2md-skill-0.1.0
+unzip qiq-html2md-0.1.0.zip
+cd qiq-html2md-0.1.0
 
 # 2. 装依赖
 pip install -r requirements.txt
@@ -132,7 +132,7 @@ pip install -r requirements.txt
 # pip install 'playwright>=1.45' && playwright install chromium
 
 # 3. 运行
-PYTHONPATH=src python -m html2md_skill --url "..." --output-dir ./out
+PYTHONPATH=src python -m qiq_html2md --url "..." --output-dir ./out
 ```
 
 ### 校验

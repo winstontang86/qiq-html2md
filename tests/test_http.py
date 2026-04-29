@@ -4,8 +4,8 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.core.errors import FatalError
-from html2md_skill.infra import http
+from qiq_html2md.core.errors import FatalError
+from qiq_html2md.infra import http
 
 
 def test_ssrf_denied_localhost() -> None:

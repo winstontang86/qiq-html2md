@@ -7,11 +7,11 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.core.pipeline import run
-from html2md_skill.core.types import SkillRequest
-from html2md_skill.infra import browser_pool, cache
-from html2md_skill.infra.browser_pool import BrowserPool
-from html2md_skill.obs import metrics
+from qiq_html2md.core.pipeline import run
+from qiq_html2md.core.types import SkillRequest
+from qiq_html2md.infra import browser_pool, cache
+from qiq_html2md.infra.browser_pool import BrowserPool
+from qiq_html2md.obs import metrics
 
 # ---------------------------------------------------------------------------
 # browser_pool
@@ -79,7 +79,7 @@ def test_browser_pool_zero_idle_timeout_closes_after_context() -> None:
 
 
 def test_http_cache_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HTML2MD_SKILL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("QIQ_HTML2MD_CACHE_DIR", str(tmp_path / "cache"))
     e = cache.HttpCacheEntry(
         url="https://example.com/a",
         final_url="https://example.com/a",
@@ -97,7 +97,7 @@ def test_http_cache_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -
 
 
 def test_extract_cache_roundtrip(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
-    monkeypatch.setenv("HTML2MD_SKILL_CACHE_DIR", str(tmp_path / "cache"))
+    monkeypatch.setenv("QIQ_HTML2MD_CACHE_DIR", str(tmp_path / "cache"))
     key = cache.make_extract_key(
         "https://example.com/a", render_mode="static", adapter_version="arxiv:v1"
     )

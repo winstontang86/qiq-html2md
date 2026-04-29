@@ -17,7 +17,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from html2md_skill.core.errors import FatalError
+from qiq_html2md.core.errors import FatalError
 
 DEFAULT_BUDGET: dict[str, int] = {
     "acquire": 140,

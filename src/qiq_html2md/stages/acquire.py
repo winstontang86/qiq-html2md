@@ -12,13 +12,13 @@ from __future__ import annotations
 import time
 from typing import Any, Literal
 
-from html2md_skill.adapters_site.base import SiteAdapter
-from html2md_skill.adapters_site.base import resolve as resolve_adapter
-from html2md_skill.core.errors import FatalError, RetryableError
-from html2md_skill.core.types import Context, StageResult
-from html2md_skill.infra import browser as browser_mod
-from html2md_skill.infra import http
-from html2md_skill.obs.events import EventBus
+from qiq_html2md.adapters_site.base import SiteAdapter
+from qiq_html2md.adapters_site.base import resolve as resolve_adapter
+from qiq_html2md.core.errors import FatalError, RetryableError
+from qiq_html2md.core.types import Context, StageResult
+from qiq_html2md.infra import browser as browser_mod
+from qiq_html2md.infra import http
+from qiq_html2md.obs.events import EventBus
 
 
 class AcquireStage:

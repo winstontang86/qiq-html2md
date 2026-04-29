@@ -10,11 +10,11 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.adapters_site.base import resolve
-from html2md_skill.core.pipeline import run
-from html2md_skill.core.types import SkillRequest
-from html2md_skill.infra import browser as browser_mod
-from html2md_skill.infra.browser import BrowserDriver, RenderResult
+from qiq_html2md.adapters_site.base import resolve
+from qiq_html2md.core.pipeline import run
+from qiq_html2md.core.types import SkillRequest
+from qiq_html2md.infra import browser as browser_mod
+from qiq_html2md.infra.browser import BrowserDriver, RenderResult
 
 # ---------------------------------------------------------------------------
 # Mock 驱动

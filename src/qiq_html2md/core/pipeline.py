@@ -12,9 +12,9 @@ import json
 import time
 from typing import Any, cast
 
-from html2md_skill.core.budget import Budget, new_default_budget
-from html2md_skill.core.errors import FatalError, RetryableError, SkillError
-from html2md_skill.core.types import (
+from qiq_html2md.core.budget import Budget, new_default_budget
+from qiq_html2md.core.errors import FatalError, RetryableError, SkillError
+from qiq_html2md.core.types import (
     Context,
     QualityReport,
     RetryPlan,
@@ -24,14 +24,14 @@ from html2md_skill.core.types import (
     SkillStats,
     StageName,
 )
-from html2md_skill.infra.fs_sandbox import FsSandbox
-from html2md_skill.obs.events import EventBus, new_trace_id, write_trace_md
-from html2md_skill.obs.metrics import export as metrics_export
-from html2md_skill.obs.metrics import write_metrics
-from html2md_skill.stages.acquire import AcquireStage
-from html2md_skill.stages.emit import EmitStage
-from html2md_skill.stages.enrich import EnrichStage
-from html2md_skill.stages.extract import ExtractStage
+from qiq_html2md.infra.fs_sandbox import FsSandbox
+from qiq_html2md.obs.events import EventBus, new_trace_id, write_trace_md
+from qiq_html2md.obs.metrics import export as metrics_export
+from qiq_html2md.obs.metrics import write_metrics
+from qiq_html2md.stages.acquire import AcquireStage
+from qiq_html2md.stages.emit import EmitStage
+from qiq_html2md.stages.enrich import EnrichStage
+from qiq_html2md.stages.extract import ExtractStage
 
 _STAGE_ORDER: tuple[StageName, ...] = ("acquire", "extract", "enrich", "emit")
 

@@ -2,7 +2,7 @@
 
 用法
 ----
-    python -m html2md_skill.build [--output dist/] [--with-tests] [--with-docs] [--name html2md]
+    python -m qiq_html2md.build [--output dist/] [--with-tests] [--with-docs] [--name html2md]
 
 产物
 ----
@@ -18,13 +18,13 @@
       schemas/
         request.schema.json
         response.schema.json
-      src/html2md_skill/**         # 全部源码（不含 __pycache__）
+      src/qiq_html2md/**         # 全部源码（不含 __pycache__）
       docs/**                      # --with-docs 开启时
       tests/**                     # --with-tests 开启时
 
 设计原则
 --------
-- **自包含**：解压后直接 `python -m html2md_skill --url ...` 就能跑。
+- **自包含**：解压后直接 `python -m qiq_html2md --url ...` 就能跑。
 - **可复现**：ZIP 按文件名排序、mtime 固定为 1980-01-01、压缩级别固定。
   `SOURCE_DATE_EPOCH` 环境变量可覆盖 built_at（标准 reproducible-builds 实践）。
 - **可校验**：`dist_info.json` 带每个文件的 SHA-256；宿主可重算比对。
@@ -195,7 +195,7 @@ def build(
     output_dir: Path | None = None,
     with_tests: bool = False,
     with_docs: bool = False,
-    name: str = "html2md-skill",
+    name: str = "qiq-html2md",
     project_root: Path = PROJECT_ROOT,
 ) -> Path:
     """执行构建，返回 zip 文件绝对路径。"""
@@ -239,7 +239,7 @@ def build(
             "includes_tests": with_tests,
             "includes_docs": with_docs,
             "python_requires": ">=3.10",
-            "entrypoint": "python -m html2md_skill",
+            "entrypoint": "python -m qiq_html2md",
             "skill_manifest": "manifest.yaml",
             "file_count": len(manifest_entries),
             "files": manifest_entries,
@@ -282,8 +282,8 @@ def build(
 
 def main(argv: list[str] | None = None) -> int:
     parser = argparse.ArgumentParser(
-        prog="html2md_skill.build",
-        description="构建 html2md skill 的可安装 zip 分发包",
+        prog="qiq_html2md.build",
+        description="构建 qiq-html2md 的可安装 zip 分发包",
     )
     parser.add_argument(
         "--output",
@@ -303,8 +303,8 @@ def main(argv: list[str] | None = None) -> int:
     )
     parser.add_argument(
         "--name",
-        default="html2md-skill",
-        help="包名前缀（默认 html2md-skill）",
+        default="qiq-html2md",
+        help="包名前缀（默认 qiq-html2md）",
     )
     parser.add_argument(
         "--project-root",

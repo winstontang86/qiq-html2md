@@ -28,8 +28,8 @@ from typing import Any
 
 import ulid
 
-from html2md_skill.core.types import Event
-from html2md_skill.infra.fs_sandbox import FsSandbox
+from qiq_html2md.core.types import Event
+from qiq_html2md.infra.fs_sandbox import FsSandbox
 
 EVENT_TAIL_SIZE = 20
 EventHandler = Callable[[Event], None]

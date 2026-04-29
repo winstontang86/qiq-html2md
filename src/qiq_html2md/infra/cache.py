@@ -10,7 +10,7 @@
 
 路径
 ----
-默认 `<XDG_CACHE_HOME|~/.cache>/html2md-skill`；可通过环境变量 `HTML2MD_SKILL_CACHE_DIR` 覆盖。
+默认 `<XDG_CACHE_HOME|~/.cache>/qiq-html2md`；可通过环境变量 `QIQ_HTML2MD_CACHE_DIR` 覆盖。
 
 设计
 ----
@@ -33,12 +33,12 @@ from typing import Any
 
 
 def _default_cache_dir() -> Path:
-    env = os.environ.get("HTML2MD_SKILL_CACHE_DIR")
+    env = os.environ.get("QIQ_HTML2MD_CACHE_DIR")
     if env:
         return Path(env).expanduser().resolve()
     xdg = os.environ.get("XDG_CACHE_HOME")
     base = Path(xdg).expanduser() if xdg else Path.home() / ".cache"
-    return (base / "html2md-skill").resolve()
+    return (base / "qiq-html2md").resolve()
 
 
 def _sha(s: str) -> str:

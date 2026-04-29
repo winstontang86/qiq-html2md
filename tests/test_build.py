@@ -10,7 +10,7 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill import build as build_mod
+from qiq_html2md import build as build_mod
 
 
 def _sha(p: Path) -> str:
@@ -26,7 +26,7 @@ def clean_dist(tmp_path: Path) -> Path:
 def test_build_produces_zip(clean_dist: Path) -> None:
     zip_path = build_mod.build(output_dir=clean_dist, with_tests=False, with_docs=True)
     assert zip_path.is_file()
-    assert zip_path.name.startswith("html2md-skill-")
+    assert zip_path.name.startswith("qiq-html2md-")
     assert zip_path.suffix == ".zip"
     assert zip_path.stat().st_size > 10_000
 
@@ -45,15 +45,13 @@ def test_zip_contains_required_files(clean_dist: Path) -> None:
     required = [
         f"{top}/SKILL.md",
         f"{top}/manifest.yaml",
-        f"{top}/README.md",
-        f"{top}/LICENSE",
         f"{top}/requirements.txt",
         f"{top}/dist_info.json",
         f"{top}/schemas/request.schema.json",
         f"{top}/schemas/response.schema.json",
-        f"{top}/src/html2md_skill/__main__.py",
-        f"{top}/src/html2md_skill/core/pipeline.py",
-        f"{top}/src/html2md_skill/stages/acquire.py",
+        f"{top}/src/qiq_html2md/__main__.py",
+        f"{top}/src/qiq_html2md/core/pipeline.py",
+        f"{top}/src/qiq_html2md/stages/acquire.py",
     ]
     for rq in required:
         assert rq in names, f"missing: {rq}"
@@ -84,9 +82,9 @@ def test_dist_info_contents(clean_dist: Path) -> None:
         top = zf.namelist()[0].split("/", 1)[0]
         data = json.loads(zf.read(f"{top}/dist_info.json"))
 
-    assert data["name"] == "html2md-skill"
+    assert data["name"] == "qiq-html2md"
     assert data["version"] == "0.1.0"
-    assert data["entrypoint"] == "python -m html2md_skill"
+    assert data["entrypoint"] == "python -m qiq_html2md"
     assert data["skill_manifest"] == "manifest.yaml"
     assert data["file_count"] >= 20
     assert data["python_requires"].startswith(">=")
@@ -155,7 +153,7 @@ def test_package_is_self_contained_and_runnable(
 
     # 关键点：src 路径能被 import
     src_dir = top / "src"
-    assert (src_dir / "html2md_skill" / "__main__.py").is_file()
+    assert (src_dir / "qiq_html2md" / "__main__.py").is_file()
 
     import subprocess
     import sys
@@ -164,12 +162,12 @@ def test_package_is_self_contained_and_runnable(
     out_dir = tmp_path / "out"
     env = os.environ.copy()
     env["PYTHONPATH"] = str(src_dir) + os.pathsep + env.get("PYTHONPATH", "")
-    env["HTML2MD_SKILL_CACHE_DIR"] = str(tmp_path / "cache")
+    env["QIQ_HTML2MD_CACHE_DIR"] = str(tmp_path / "cache")
     result = subprocess.run(
         [
             sys.executable,
             "-m",
-            "html2md_skill",
+            "qiq_html2md",
             "--allow-file-scheme",
             "--url",
             f"file://{fixture}",

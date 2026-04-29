@@ -5,9 +5,9 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.core.errors import FatalError
-from html2md_skill.infra.fs_sandbox import FsSandbox
-from html2md_skill.obs.events import EventBus, new_trace_id
+from qiq_html2md.core.errors import FatalError
+from qiq_html2md.infra.fs_sandbox import FsSandbox
+from qiq_html2md.obs.events import EventBus, new_trace_id
 
 
 def test_sandbox_write_and_escape(tmp_path: Path) -> None:

@@ -4,8 +4,8 @@ import time
 
 import pytest
 
-from html2md_skill.core.budget import Budget, new_default_budget
-from html2md_skill.core.errors import FatalError, RetryableError, SkillError
+from qiq_html2md.core.budget import Budget, new_default_budget
+from qiq_html2md.core.errors import FatalError, RetryableError, SkillError
 
 
 def test_budget_basic() -> None:

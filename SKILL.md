@@ -38,7 +38,7 @@
 CLI：
 
 ```bash
-python -m html2md_skill --url "https://ar5iv.labs.arxiv.org/html/2501.12345" --output-dir ./output
+python -m qiq_html2md --url "https://ar5iv.labs.arxiv.org/html/2501.12345" --output-dir ./output
 ```
 
 ## 返回关键字段
@@ -57,7 +57,7 @@ python -m html2md_skill --url "https://ar5iv.labs.arxiv.org/html/2501.12345" --o
 `render_mode=browser` 或 `auto` 且页面看起来由 JS 渲染时，会启动 Playwright Chromium：
 
 ```bash
-pip install 'html2md-skill[browser]'
+pip install 'qiq-html2md[browser]'
 playwright install chromium
 ```
 
@@ -69,4 +69,4 @@ playwright install chromium
 - HTTP 级：带 ETag/Last-Modified，304 命中；
 - 抽取结果级：`sha256(url + render_mode + adapter_version + profile)` 指纹。
 
-缓存目录：`$XDG_CACHE_HOME/html2md-skill` 或 `~/.cache/html2md-skill`，通过环境变量 `HTML2MD_SKILL_CACHE_DIR` 覆盖。
+缓存目录：`$XDG_CACHE_HOME/qiq-html2md` 或 `~/.cache/qiq-html2md`，通过环境变量 `QIQ_HTML2MD_CACHE_DIR` 覆盖。

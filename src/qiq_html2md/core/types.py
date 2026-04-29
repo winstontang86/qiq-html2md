@@ -1,6 +1,6 @@
 """核心数据类型 —— 单一数据来源。
 
-本模块定义 html2md skill 的全部对外/对内契约数据类，共 7 个：
+本模块定义 qiq-html2md 的全部对外/对内契约数据类，共 7 个：
 - SkillRequest / SkillResponse —— 契约 IO
 - Context —— 任务上下文
 - StageResult —— Stage 产物

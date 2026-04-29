@@ -8,8 +8,8 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill import __main__ as cli
-from html2md_skill.core.types import SkillRequest
+from qiq_html2md import __main__ as cli
+from qiq_html2md.core.types import SkillRequest
 
 
 class DummyResponse:
@@ -92,7 +92,7 @@ def test_main_exit_codes(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
         return DummyResponse("passed")
 
     monkeypatch.setattr(cli, "run", fake_run)
-    monkeypatch.setattr(sys, "argv", ["html2md-skill", "--url", "https://example.com/a"])
+    monkeypatch.setattr(sys, "argv", ["qiq-html2md", "--url", "https://example.com/a"])
     assert cli.main() == 0
     out = capsys.readouterr().out
     assert '"status": "passed"' in out
@@ -100,11 +100,11 @@ def test_main_exit_codes(monkeypatch: pytest.MonkeyPatch, capsys: pytest.Capture
 
 def test_main_degraded_exit_code(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "run", lambda *_args, **_kwargs: DummyResponse("degraded"))
-    monkeypatch.setattr(sys, "argv", ["html2md-skill", "--url", "https://example.com/a"])
+    monkeypatch.setattr(sys, "argv", ["qiq-html2md", "--url", "https://example.com/a"])
     assert cli.main() == 2
 
 
 def test_main_failed_exit_code(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(cli, "run", lambda *_args, **_kwargs: DummyResponse("failed"))
-    monkeypatch.setattr(sys, "argv", ["html2md-skill", "--url", "https://example.com/a"])
+    monkeypatch.setattr(sys, "argv", ["qiq-html2md", "--url", "https://example.com/a"])
     assert cli.main() == 1

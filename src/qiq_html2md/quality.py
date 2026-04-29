@@ -22,7 +22,7 @@ from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
 
-from html2md_skill.core.types import Context, QualityReport
+from qiq_html2md.core.types import Context, QualityReport
 
 
 @dataclass(frozen=True)

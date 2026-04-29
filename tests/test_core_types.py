@@ -1,6 +1,6 @@
 from __future__ import annotations
 
-from html2md_skill.core.types import (
+from qiq_html2md.core.types import (
     Context,
     Event,
     QualityReport,

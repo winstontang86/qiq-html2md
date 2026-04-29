@@ -89,7 +89,7 @@ def export_otel(endpoint: str) -> bool:
         reader = PeriodicExportingMetricReader(exporter, export_interval_millis=0)
         provider = MeterProvider(metric_readers=[reader])
         _otel_metrics.set_meter_provider(provider)
-        meter = _otel_metrics.get_meter("html2md-skill")
+        meter = _otel_metrics.get_meter("qiq-html2md")
         # 只做最少埋点：duration、retries、budget_used_ratio
         meter.create_histogram("html2md.duration_ms").record(0)  # 立即推送触发
         return True

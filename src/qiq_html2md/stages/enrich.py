@@ -24,12 +24,12 @@ from urllib.parse import urljoin, urlparse
 from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 
-from html2md_skill.adapters_site.base import resolve as resolve_adapter
-from html2md_skill.core.errors import RetryableError
-from html2md_skill.core.types import Context, StageResult
-from html2md_skill.infra import http
-from html2md_skill.infra.fs_sandbox import FsSandbox
-from html2md_skill.infra.html_attrs import class_str, int_attr, str_attr
+from qiq_html2md.adapters_site.base import resolve as resolve_adapter
+from qiq_html2md.core.errors import RetryableError
+from qiq_html2md.core.types import Context, StageResult
+from qiq_html2md.infra import http
+from qiq_html2md.infra.fs_sandbox import FsSandbox
+from qiq_html2md.infra.html_attrs import class_str, int_attr, str_attr
 
 # DOM 锚点属性名：Emit 据此找到 artifact
 ANCHOR_ATTR = "data-h2m-id"
@@ -696,7 +696,7 @@ def _apply_screenshot_fallback(
     from_browser: dict[str, bytes] = {}
     if missing:
         try:
-            from html2md_skill.infra import browser as browser_mod
+            from qiq_html2md.infra import browser as browser_mod
             driver = browser_mod.get_driver()
             # 用 annotated_html 替代 ctx.enrich.annotated_html（还未写回 ctx）
             annotated_html = str(soup) if soup else (ctx.extract or {}).get("clean_html", "")

@@ -7,8 +7,8 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.core.pipeline import run
-from html2md_skill.core.types import SkillRequest
+from qiq_html2md.core.pipeline import run
+from qiq_html2md.core.types import SkillRequest
 
 
 @pytest.fixture()

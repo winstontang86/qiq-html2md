@@ -7,14 +7,14 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.core.budget import Budget
-from html2md_skill.core.pipeline import plan_retry, run
-from html2md_skill.core.types import (
+from qiq_html2md.core.budget import Budget
+from qiq_html2md.core.pipeline import plan_retry, run
+from qiq_html2md.core.types import (
     Context,
     QualityReport,
     SkillRequest,
 )
-from html2md_skill.quality import evaluate
+from qiq_html2md.quality import evaluate
 
 # ---------------------------------------------------------------------------
 # plan_retry 单元测试
@@ -32,7 +32,7 @@ def _mk_ctx() -> Context:
 def test_plan_retry_returns_none_when_max_retry_reached() -> None:
     ctx = _mk_ctx()
     # 模拟已经重试过 2 次
-    from html2md_skill.core.types import RetryPlan
+    from qiq_html2md.core.types import RetryPlan
     ctx.retry_history = [
         RetryPlan(reason="text_too_short", target_stage="acquire", delta={}),
         RetryPlan(reason="text_too_short", target_stage="acquire", delta={}),
@@ -206,7 +206,7 @@ def test_quality_formula_retention() -> None:
 
 def test_local_retry_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """第一次跑的时候强制 Extract 返回短文，之后检查第二轮能 passed。"""
-    from html2md_skill.stages import extract as extract_mod
+    from qiq_html2md.stages import extract as extract_mod
 
     original_run = extract_mod.ExtractStage.run
     call_counter = {"n": 0}
@@ -219,7 +219,7 @@ def test_local_retry_end_to_end(tmp_path: Path, monkeypatch: pytest.MonkeyPatch)
             stats = dict(result.output.get("extract_stats", {}))
             stats["text_len"] = 100
             new_output = {**result.output, "extract_stats": stats}
-            from html2md_skill.core.types import StageResult
+            from qiq_html2md.core.types import StageResult
             return StageResult(
                 stage="extract",
                 output=new_output,

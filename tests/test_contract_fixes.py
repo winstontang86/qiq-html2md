@@ -9,9 +9,9 @@ from pathlib import Path
 
 import pytest
 
-from html2md_skill.core.pipeline import run
-from html2md_skill.core.types import Context, SkillRequest
-from html2md_skill.stages.emit import _inline
+from qiq_html2md.core.pipeline import run
+from qiq_html2md.core.types import Context, SkillRequest
+from qiq_html2md.stages.emit import _inline
 
 
 @pytest.mark.parametrize("url", ["", "not a url at all"])
@@ -120,7 +120,7 @@ def test_cli_supports_advanced_options(tmp_path: Path) -> None:
         [
             sys.executable,
             "-m",
-            "html2md_skill",
+            "qiq_html2md",
             "--allow-file-scheme",
             "--url",
             f"file://{p}",

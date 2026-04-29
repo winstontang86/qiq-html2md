@@ -18,8 +18,8 @@ from urllib.parse import urlparse
 
 import httpx
 
-from html2md_skill.core.errors import FatalError, RetryableError
-from html2md_skill.infra import cache as cache_mod
+from qiq_html2md.core.errors import FatalError, RetryableError
+from qiq_html2md.infra import cache as cache_mod
 
 MAX_RESPONSE_BYTES = 50 * 1024 * 1024  # 50MB
 MAX_REDIRECTS = 5
@@ -110,7 +110,7 @@ def get(
         return _get_file(url)
 
     default_headers = {
-        "User-Agent": "html2md-skill/0.1 (+https://github.com/laotang/qiq-html2md)",
+        "User-Agent": "qiq-html2md/0.1 (+https://github.com/laotang/qiq-html2md)",
         "Accept": "text/html,application/xhtml+xml,*/*;q=0.8",
         "Accept-Language": "en,zh;q=0.8",
     }

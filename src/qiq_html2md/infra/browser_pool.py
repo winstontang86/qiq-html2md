@@ -28,7 +28,7 @@ from collections.abc import Iterator
 from contextlib import contextmanager
 from typing import Any
 
-from html2md_skill.core.errors import FatalError
+from qiq_html2md.core.errors import FatalError
 
 IDLE_TIMEOUT_SECONDS = 120.0  # 超过多久闲置则关停
 _pool_singleton: BrowserPool | None = None
@@ -60,7 +60,7 @@ class BrowserPool:
         except ImportError as e:
             raise FatalError(
                 "playwright_not_installed",
-                hint="pip install 'html2md-skill[browser]' 并 playwright install chromium",
+                hint="pip install 'qiq-html2md[browser]' 并 playwright install chromium",
             ) from e
         self._pw = sync_playwright().start()
         self._browser = self._pw.chromium.launch(headless=True)
@@ -82,7 +82,7 @@ class BrowserPool:
             self.stats_context_opens += 1
         ctx = browser.new_context(
             viewport=viewport or {"width": 1280, "height": 1600},
-            user_agent=user_agent or "html2md-skill/0.1",
+            user_agent=user_agent or "qiq-html2md/0.1",
         )
         try:
             yield ctx

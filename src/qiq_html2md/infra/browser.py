@@ -19,7 +19,7 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any, Protocol, runtime_checkable
 
-from html2md_skill.core.errors import FatalError, RetryableError
+from qiq_html2md.core.errors import FatalError, RetryableError
 
 
 @dataclass(frozen=True)
@@ -75,7 +75,7 @@ def _playwright_driver() -> BrowserDriver:
     except ImportError as e:
         raise FatalError(
             "playwright_not_installed",
-            hint="pip install 'html2md-skill[browser]' 并执行 playwright install chromium",
+            hint="pip install 'qiq-html2md[browser]' 并执行 playwright install chromium",
         ) from e
     return _PlaywrightDriver()
 
@@ -101,7 +101,7 @@ class _PlaywrightDriver:
         scroll_to_bottom: bool = True,
         screenshot_selectors: list[str] | None = None,
     ) -> RenderResult:
-        from html2md_skill.infra.browser_pool import get_pool
+        from qiq_html2md.infra.browser_pool import get_pool
 
         screenshots: dict[str, bytes] = {}
         pool = get_pool()
@@ -154,7 +154,7 @@ class _PlaywrightDriver:
         base_url: str | None = None,
         timeout_ms: int = 15000,
     ) -> dict[str, bytes]:
-        from html2md_skill.infra.browser_pool import get_pool
+        from qiq_html2md.infra.browser_pool import get_pool
 
         if not selectors:
             return {}

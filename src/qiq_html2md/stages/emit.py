@@ -19,11 +19,11 @@ from typing import Any, Literal
 from bs4 import BeautifulSoup, Tag
 from bs4.element import NavigableString
 
-from html2md_skill import quality as quality_mod
-from html2md_skill.core.errors import RetryableError
-from html2md_skill.core.types import Context, StageResult
-from html2md_skill.infra.fs_sandbox import FsSandbox
-from html2md_skill.stages.enrich import ANCHOR_ATTR
+from qiq_html2md import quality as quality_mod
+from qiq_html2md.core.errors import RetryableError
+from qiq_html2md.core.types import Context, StageResult
+from qiq_html2md.infra.fs_sandbox import FsSandbox
+from qiq_html2md.stages.enrich import ANCHOR_ATTR
 
 
 class EmitStage:
@@ -88,7 +88,7 @@ class EmitStage:
         if ctx.request.quality_check:
             report = quality_mod.evaluate(ctx)
         else:
-            from html2md_skill.core.types import QualityReport
+            from qiq_html2md.core.types import QualityReport
 
             report = QualityReport(
                 passed=True,

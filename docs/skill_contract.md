@@ -54,7 +54,7 @@
 ```yaml
 name: html2md
 version: 2.0.0
-entry: python -m html2md_skill
+entry: python -m qiq_html2md
 description: 将 HTML 页面转换为高保真 Markdown，面向论文与技术报告
 timeout_default_seconds: 600
 timeout_max_seconds: 600
@@ -142,7 +142,7 @@ tags: [html, markdown, paper, document, extraction]
 ## 7. 宿主接入要点
 
 - **WorkBuddy / OpenClaw**：读取 `SKILL.md` 发现、通过 `manifest.yaml` 的 `entry` 调用、按 schema 校验 IO。
-- **CLI**：`python -m html2md_skill --request request.json`。
+- **CLI**：`python -m qiq_html2md --request request.json`。
 - **MCP**：以 `tools/call` 形态暴露，参数透传 `SkillRequest`。
 
 所有宿主对 skill 而言是等价的，skill 不做差异化分支。
