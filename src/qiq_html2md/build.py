@@ -124,22 +124,21 @@ def _built_at_iso() -> str:
 
 
 def _build_requirements_txt(project_root: Path = PROJECT_ROOT) -> str:
-    """从 pyproject.toml 读依赖，生成安装方友好的 requirements.txt。"""
+    """从 pyproject.toml 读依赖，生成安装方友好的 requirements.txt。
+
+    v0.3.0 起 playwright 已提升为硬依赖（在 `dependencies` 中），
+    不再作为可选 extras。Chromium 二进制需额外 `playwright install chromium`。
+    """
     pyproject = project_root / "pyproject.toml"
     data = tomllib.loads(pyproject.read_text(encoding="utf-8"))
     deps: list[str] = list(data["project"].get("dependencies", []))
-    extras = data["project"].get("optional-dependencies", {})
-    browser_deps: list[str] = list(extras.get("browser", []))
 
-    lines = ["# 运行时最小依赖（由构建工具从 pyproject.toml 生成）"]
+    lines = ["# 运行时强制依赖（由构建工具从 pyproject.toml 生成）"]
     for d in deps:
         lines.append(d)
-    if browser_deps:
-        lines.append("")
-        lines.append("# 可选：浏览器渲染（render_mode=browser 时需要）")
-        lines.append("#   需要额外 `playwright install chromium`")
-        for d in browser_deps:
-            lines.append(f"# {d}")
+    lines.append("")
+    lines.append("# 注意：安装完 pip 依赖后，必须额外下载 Chromium 二进制：")
+    lines.append("#   playwright install chromium")
     lines.append("")
     return "\n".join(lines)
 

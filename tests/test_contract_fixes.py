@@ -121,6 +121,7 @@ def test_cli_supports_advanced_options(tmp_path: Path) -> None:
             sys.executable,
             "-m",
             "qiq_html2md",
+            "--skip-deps-check",
             "--allow-file-scheme",
             "--url",
             f"file://{p}",

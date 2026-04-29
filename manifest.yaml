@@ -1,5 +1,5 @@
 name: qiq-html2md
-version: 0.2.1
+version: 0.3.0
 description: 面向论文类 HTML 页面的高保真 Markdown 转换 skill
 entry: python -m qiq_html2md
 timeout_default_seconds: 600
@@ -28,7 +28,7 @@ permissions:
     engine: chromium
     isolated_context: true
     allow_download: false
-    optional: true
+    optional: false
 
 observability:
   diag_dir: "${output_dir}/_diag"

@@ -64,6 +64,10 @@ class EnrichStage:
         # --- 1) 参考文献：先抽出整节（pop 出 DOM，避免 Emit 重复渲染） ---
         refs, refs_warnings = _extract_refs(soup, adapter.refs_selector, include_refs)
 
+        # --- 1.5) Algorithm/Listing：整块预处理为占位节点 ---
+        # 必须在 _process_formulas 之前，避免内部 <math alttext="\pgfsys..."> 被当公式。
+        algorithms, algo_warnings = _process_algorithm_listings(soup)
+
         # --- 2) 公式：打锚点 + artifact ---
         formulas, formula_warnings = _process_formulas(soup, formula_mode)
 
@@ -101,6 +105,7 @@ class EnrichStage:
             "tables": tables,
             "formulas": formulas,
             "refs": refs,
+            "algorithms": algorithms,
             # Enrich 可能对 DOM 打过锚点/摘除过 refs，把新的 HTML 回写给 Emit
             "annotated_html": str(soup),
             "enrich_stats": {
@@ -120,11 +125,13 @@ class EnrichStage:
                 "formula_mathml": sum(1 for f in formulas if f.get("mode") == "mathml"),
                 "formula_image": sum(1 for f in formulas if f.get("mode") == "image"),
                 "ref_total": len(refs),
+                "algorithm_total": len(algorithms),
             },
         }
 
         warnings: list[dict[str, Any]] = []
         warnings.extend(refs_warnings)
+        warnings.extend(algo_warnings)
         warnings.extend(formula_warnings)
         warnings.extend(table_warnings)
         warnings.extend(image_warnings)
@@ -310,6 +317,9 @@ def _find_tex_annotation(math: Tag) -> str | None:
     """从 <math> 中找 LaTeX 源，优先顺序：
     1. <annotation encoding="application/x-tex">（MathML semantics 块）；
     2. <math alttext="...">（LaTeXML/arxiv 常用，直接把 LaTeX 放属性里）。
+
+    若候选源含 TikZ/PGF 渲染源码（`\\pgfsys@`、`\\pgfpicture`、`\\lxSVG`、
+    `\\hbox to` 等），视为"渲染污染"直接弃用，让调用方回落到 MathML 或占位。
     """
     for ann in math.find_all("annotation"):
         if not isinstance(ann, Tag):
@@ -318,11 +328,31 @@ def _find_tex_annotation(math: Tag) -> str | None:
         if "tex" in enc:
             txt = ann.get_text() or ""
             txt = txt.strip()
-            if txt:
+            if txt and not _is_pgf_polluted(txt):
                 return txt
     # 回退：math 的 alttext 属性
     alt = str_attr(math, "alttext").strip()
-    return alt or None
+    if alt and not _is_pgf_polluted(alt):
+        return alt
+    return None
+
+
+# PGF/TikZ 渲染源码黑名单：命中任一即视为污染。
+_PGF_POLLUTION_MARKERS: tuple[str, ...] = (
+    r"\pgfsys@",
+    r"\pgfpicture",
+    r"\lxSVG",
+    r"\hbox to",
+    r"\leavevmode\hbox",
+    r"\makeatletter",
+)
+
+
+def _is_pgf_polluted(tex: str) -> bool:
+    """命中任一 PGF/TikZ 渲染源码特征即视为污染。"""
+    if not tex:
+        return False
+    return any(marker in tex for marker in _PGF_POLLUTION_MARKERS)
 
 
 # arxiv / LaTeXML 等式包装的 CSS 类集合
@@ -540,14 +570,16 @@ def _choose_table_mode(requested: str, score: int) -> str:
     """按架构文档 §6.2 映射。
 
     auto 下优先尝试 Markdown（_table_to_markdown 本身会对 rowspan/colspan/nested 返回
-    None 自动回落到 html），只有当复杂度非常高时才直接走图片降级。
+    None 自动回落到 html）。复杂度超阈值时保留 HTML 展示（Markdown 生态兼容），
+    **不再默认走 image** —— 只有显式 `table_mode=image` 才触发截图路径。
+    这样无浏览器环境里复杂表格仍可正常阅读，且 quality 不会被拖分。
     """
     if requested in ("markdown", "html", "image"):
         return requested
     # auto
     if score <= 10:
         return "markdown"
-    return "image"
+    return "html"
 
 
 def _table_caption(table: Tag) -> str | None:
@@ -1011,3 +1043,285 @@ def _formula_is_empty(f: dict[str, Any]) -> bool:
     if mode == "mathml" and (f.get("mathml") or "").strip():
         return False
     return True
+
+
+# ---------------------------------------------------------------------------
+# algorithm listings（LaTeXML/arxiv）
+# ---------------------------------------------------------------------------
+
+
+# 论文中常见的 4 个特殊 token；TikZ 常把它们画成彩色矩形框 → 给 alttext 塞入
+# 大段 pgf 渲染源码。清洗完 pgf 后，这些 token 若残留 `<|...|>` 片段就原样保留。
+_SPECIAL_TOKEN_RE = re.compile(
+    r"<\|\s*(?:begin|end)_search_(?:query|result)\s*\|>",
+    re.IGNORECASE,
+)
+
+
+def _process_algorithm_listings(
+    soup: BeautifulSoup,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """把 LaTeXML 的算法伪代码块（`figure.ltx_float_algorithm` 或独立
+    `div.ltx_listing`）整体替换为占位节点，避免内部 `<math>` 被公式处理链接管。
+
+    产出 artifact：
+        {
+            "id": "alg001",
+            "kind": "algorithm",
+            "title": "Algorithm 1 Search-o1 Inference",   # 可选
+            "lines": ["1: Input: ...", "2: repeat", ...],
+        }
+    """
+    algorithms: list[dict[str, Any]] = []
+    warnings: list[dict[str, Any]] = []
+
+    # 1) figure.ltx_float_algorithm —— 标准算法浮动块
+    for fig in list(soup.find_all("figure")):
+        if not isinstance(fig, Tag):
+            continue
+        cls = class_str(fig).lower()
+        if "ltx_float_algorithm" not in cls:
+            continue
+        _convert_algorithm_figure(soup, fig, algorithms)
+
+    # 2) 独立的 div.ltx_listing（没有 figure 包裹的代码清单）
+    #    注意：class_str 做子串匹配会把 `ltx_listingline`（行节点）误识别为 listing
+    #    容器，所以这里拆成 class token 精确比对。
+    for div in list(soup.find_all("div")):
+        if not isinstance(div, Tag):
+            continue
+        cls_tokens = class_str(div).lower().split()
+        if "ltx_listing" not in cls_tokens:
+            continue
+        # 若已被上面的 figure 带走则此刻 div.parent 为 None
+        if div.parent is None:
+            continue
+        _convert_standalone_listing(soup, div, algorithms)
+
+    if not algorithms:
+        return algorithms, warnings
+
+    return algorithms, warnings
+
+
+def _convert_algorithm_figure(
+    soup: BeautifulSoup,
+    fig: Tag,
+    algorithms: list[dict[str, Any]],
+) -> None:
+    """把 `<figure class="ltx_float_algorithm">` 转为占位节点。"""
+    title = _algo_title_from_figure(fig)
+    listing = fig.find("div", class_="ltx_listing")
+    lines = _collect_listing_lines(listing if isinstance(listing, Tag) else fig)
+    aid = f"alg{len(algorithms) + 1:03d}"
+    algorithms.append(
+        {
+            "id": aid,
+            "kind": "algorithm",
+            "title": title,
+            "lines": lines,
+        }
+    )
+    placeholder = soup.new_tag("div")
+    placeholder.attrs[ANCHOR_ATTR] = aid
+    placeholder.attrs["data-h2m-kind"] = "algorithm"
+    fig.replace_with(placeholder)
+
+
+def _convert_standalone_listing(
+    soup: BeautifulSoup,
+    div: Tag,
+    algorithms: list[dict[str, Any]],
+) -> None:
+    """把独立的 `<div class="ltx_listing">` 转为占位节点（无标题）。"""
+    lines = _collect_listing_lines(div)
+    if not lines:
+        return
+    aid = f"alg{len(algorithms) + 1:03d}"
+    algorithms.append(
+        {
+            "id": aid,
+            "kind": "algorithm",
+            "title": None,
+            "lines": lines,
+        }
+    )
+    placeholder = soup.new_tag("div")
+    placeholder.attrs[ANCHOR_ATTR] = aid
+    placeholder.attrs["data-h2m-kind"] = "algorithm"
+    div.replace_with(placeholder)
+
+
+def _algo_title_from_figure(fig: Tag) -> str | None:
+    """从 `<figcaption>` 提取算法标题。"""
+    cap = fig.find("figcaption")
+    if not isinstance(cap, Tag):
+        return None
+    text = cap.get_text(" ", strip=True)
+    return text or None
+
+
+def _collect_listing_lines(container: Tag) -> list[str]:
+    """按文档顺序收集 `div.ltx_listingline` 文本行；每行做 pgf 清洗。
+
+    关键：listingline 内部可能含 `<math alttext="...\\pgfsys...">` 节点，
+    get_text 会把 alttext 里的 TikZ 渲染源码全部取出。因此在提取文本前，
+    先对每个 listingline 的副本做"math 节点剥离"——用 alttext 里的"干净
+    LaTeX"替换 `<math>`，或者直接丢弃污染的 math 节点只保留其可见文本。
+    """
+    lines: list[str] = []
+    line_nodes = container.find_all("div", class_="ltx_listingline")
+    if not line_nodes:
+        # 兜底：按 `<br>` 拆分整个 container
+        raw = _clean_algo_text(container.get_text("\n", strip=False))
+        for raw_line in raw.splitlines():
+            s = raw_line.rstrip()
+            if s:
+                lines.append(s)
+        return lines
+    for node in line_nodes:
+        if not isinstance(node, Tag):
+            continue
+        text = _extract_listing_line_text(node)
+        text = _clean_algo_text(text)
+        text = text.strip()
+        if text:
+            lines.append(text)
+    return lines
+
+
+def _extract_listing_line_text(line_node: Tag) -> str:
+    """把 listingline 的可见文本提取出来，同时阻止 math.alttext 的 pgf 源码泄漏。
+
+    策略：对每个 `<math>` 子节点：
+    - 如果 annotation/alttext 是干净 LaTeX → 用 `$<latex>$` 形式占位；
+    - 否则 → 用其 visible textContent 占位（MathML 渲染后的 Unicode 符号，一般可读）。
+    再从整棵 line_node 拷贝上取 text。
+    """
+    from copy import copy as _copy
+
+    # 浅 copy 节点，避免污染原 DOM（algorithm figure 稍后会被替换为占位节点，
+    # 不影响主流程；但保守起见，操作副本）。
+    clone = _copy(line_node)
+    for math in list(clone.find_all("math")):
+        if not isinstance(math, Tag):
+            continue
+        replacement = _math_to_inline_token(math, clone)
+        math.replace_with(replacement)
+    return clone.get_text(" ", strip=False)
+
+
+def _math_to_inline_token(math: Tag, parent: Tag) -> NavigableString:
+    """把 math 节点转为一个**不含 pgf 污染**的 NavigableString。"""
+    latex = _find_tex_annotation(math)  # 已自动剔除 pgf 污染
+    if latex:
+        return NavigableString(f" ${latex}$ ")
+    # 回退：用 math 自身的 visible text（MathJax 渲染后的 Unicode 字符）
+    visible = math.get_text(" ", strip=True)
+    # visible 里不应含 pgf（因为浏览器看到的就是符号），但保险起见再过一次
+    if _has_pgf_signal(visible):
+        visible = ""
+    _ = parent  # 保留参数位供将来扩展
+    return NavigableString(f" {visible} ")
+
+
+def _clean_algo_text(text: str) -> str:
+    """算法行文本清洗：
+    - 移除 pgf/TikZ 源码（`\\pgfsys@` 起段落到对应 `\\endpgfpicture`/空行）；
+    - 归一化多余空白；
+    - 保留特殊 token `<|...|>` 原样。
+    """
+    if not text:
+        return ""
+    # 第一层：按行剔除 pgf 噪声
+    if _has_pgf_signal(text):
+        kept: list[str] = []
+        for ln in text.splitlines():
+            if _line_is_pgf_noise(ln):
+                continue
+            kept.append(ln)
+        text = "\n".join(kept)
+    # 第二层：剔除整行 TeX 渲染包装 / 残留 RGB 数字片段
+    text = _strip_tex_wrappers(text)
+    # 合并多余空白
+    text = re.sub(r"[ \t]+", " ", text)
+    text = re.sub(r"\n{3,}", "\n\n", text)
+    return text
+
+
+def _has_pgf_signal(text: str) -> bool:
+    """检测是否出现 pgf/TikZ 或其常用配套指令。"""
+    if any(marker in text for marker in _PGF_POLLUTION_MARKERS):
+        return True
+    side_markers = (
+        r"\definecolor",
+        r"\pgfsetlinewidth",
+        r"\lxSVG@closescope",
+        r"\endpgfpicture",
+        "pgfstrokecolor",
+    )
+    return any(m in text for m in side_markers)
+
+
+# 整行都是 TeX 渲染包装（非公式源），应被剔除。
+_TEX_WRAPPER_RE = re.compile(
+    r"(?mi)^\s*(?:"
+    r"\\leavevmode\b.*|"
+    r"\\mathchoice\b.*|"
+    r"\\hbox\s+to\b.*|"
+    r"\\vbox\s+to\b.*|"
+    r"\\endpgfpicture\b.*|"
+    r"\\pgfsetlinewidth\b.*|"
+    r"\\pgfsys@\w+.*|"
+    r"\\lxSVG[@\w]*.*|"
+    r"\\hss\s*\}?.*|"
+    r"\\hskip\s+-?\d.*|"
+    r"\\lower-\d.*|"
+    r"\\definecolor\b.*|"
+    r"\\color\b.*|"
+    r"\\pgf@\w+.*"
+    r")\s*$"
+)
+
+# 只含 RGB 数字序列（pgf 颜色定义残片）：如 `0.01953125,0.41796875,0.203125}...`。
+_RGB_ONLY_RE = re.compile(r"^[\s\d.,{}%]+$")
+
+
+def _strip_tex_wrappers(text: str) -> str:
+    """移除整行的 TeX 渲染包装 / 残留片段。"""
+    if not text:
+        return text
+    kept: list[str] = []
+    for ln in text.splitlines():
+        if not ln.strip():
+            kept.append(ln)
+            continue
+        if _TEX_WRAPPER_RE.match(ln):
+            continue
+        stripped = ln.strip()
+        # 纯数字+标点残片：至少 8 字符 + 含逗号，避免误伤短正文
+        if len(stripped) >= 8 and "," in stripped and _RGB_ONLY_RE.match(stripped):
+            continue
+        kept.append(ln)
+    return "\n".join(kept)
+
+
+def _line_is_pgf_noise(line: str) -> bool:
+    """判断一行是否是 PGF/TikZ 渲染源码（应剔除）。
+
+    保留特殊 token 形如 `<|begin_search_query|>`：哪怕它出现在 `\\textbf{...}`
+    包裹里，文本扫描时也会 preserved。
+    """
+    if not line.strip():
+        return False
+    # 命中黑名单标记 → 纯渲染噪声
+    if any(marker in line for marker in _PGF_POLLUTION_MARKERS):
+        return True
+    # `\definecolor`、`\pgf@` 等前缀
+    stripped = line.lstrip()
+    if stripped.startswith(("\\definecolor", "\\color", "\\pgf@")):
+        return True
+    # 纯符号行（例如 `{{}{}}}{`）
+    if len(stripped) <= 12 and all(c in "{}()[]<>\\|/,; \t" for c in stripped):
+        return True
+    return False

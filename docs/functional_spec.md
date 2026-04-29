@@ -359,41 +359,38 @@ URL 安全：
 
 ## 11. 运行时依赖
 
-### 11.1 依赖分层
+### 11.1 依赖清单（全部为 L1 强制依赖）
 
-| 层级 | 内容 | 必要性 | 缺失影响 |
-|------|------|------|----------|
-| **L1** | `httpx` / `lxml` / `beautifulsoup4` / `readability-lxml` / `pydantic` / `python-ulid` | 硬依赖（装不上就无法启动） | Python import 报错 |
-| **L2** | `playwright>=1.45` + Chromium 二进制 | 效果增强（强烈推荐） | JS 渲染页面抓到空白；复杂表格无法截图降级，质量分上限受限；无法触发懒加载滚动 |
+v0.3.0 起所有依赖均为 **L1 强制依赖**；曾经的 L2 概念已废弃。
 
-L1 由 `pyproject.toml` 的 `dependencies` 声明，随 `pip install qiq-html2md` 自动安装。
-L2 由 `[project.optional-dependencies].browser` 与其友好别名 `recommended` 声明。
+| 依赖 | 类型 | 安装来源 |
+|------|------|----------|
+| `httpx` / `lxml` / `beautifulsoup4` / `readability-lxml` / `pydantic` / `python-ulid` / `playwright>=1.45` | Python 包 | `pyproject.toml` 的 `dependencies` |
+| Chromium 浏览器二进制 | 外部二进制 | `playwright install chromium`（pip 无法自动触发） |
+
+缺失任何一项 Python 包 → import 阶段就会报错；缺失 Chromium 二进制 → preflight 拒绝启动（见 11.3）。
 
 ### 11.2 一键安装命令
 
 ```bash
-# 基础安装（仅 L1，可处理纯静态论文）
+# 必做的两步
 pip install qiq-html2md
-
-# 推荐安装（L1 + L2）
-pip install 'qiq-html2md[recommended]'
 playwright install chromium
 ```
 
 ### 11.3 运行时预检契约
 
-Skill 启动时自动执行**只读**依赖预检，行为如下：
+Skill 启动时自动执行**只读**依赖预检，默认 strict：
 
 | CLI 开关 | 行为 | 退出码语义 |
 |---------|------|-----------|
-| 默认 | 缺失仅 warn 到 stderr + 写 `_diag/preflight.json`，不阻塞管线 | 与管线一致（0/1/2） |
-| `--strict-deps` | 缺失直接硬失败，不启动管线 | 依赖缺失时返回 `2` |
+| 默认（strict） | 缺失任一依赖 → 直接硬失败，**不启动** pipeline，stderr 列出所有缺失 + 修复命令 | 依赖缺失时返回 `2` |
 | `--check-deps` | 仅跑预检后退出，不执行转换 | 全齐返回 `0`，缺失返回 `1` |
-| `--skip-deps-check` | 跳过启动预检（适合 CI 已确认依赖齐全） | 与管线一致 |
+| `--skip-deps-check` | 跳过启动预检（仅适合 CI 已确认依赖齐全） | 与管线一致（0/1/2） |
 
 预检覆盖项：
-- Playwright 包是否可 import
-- Playwright 报告的 Chromium 可执行文件是否存在
+- Playwright 包是否可 import（L1）
+- Playwright 报告的 Chromium 可执行文件是否存在（L1）
 
 预检规则：
 - 不启动任何浏览器实例，仅查询路径并做 `Path.exists()`。

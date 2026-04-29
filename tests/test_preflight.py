@@ -71,9 +71,11 @@ def test_preflight_playwright_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     names = {c.name for c in report.missing}
     assert "playwright" in names
     assert "chromium" in names
+    # v0.3.0 起所有依赖都是 L1 必需
+    assert all(c.level == "L1" for c in report.checks)
     text = preflight.format_install_hints(report)
     assert "playwright" in text
-    assert "recommended" in text or "browser" in text
+    assert "必需" in text
     assert "playwright install chromium" in text
 
 
@@ -122,7 +124,7 @@ def test_preflight_all_ok(monkeypatch: pytest.MonkeyPatch, tmp_path) -> None:
     assert report.all_ok
     assert not report.missing
     text = preflight.format_install_hints(report)
-    assert "all optional runtime deps OK" in text
+    assert "all required runtime deps OK" in text
 
 
 # ---------------------------------------------------------------------------
@@ -166,15 +168,15 @@ def test_cli_check_deps_missing(monkeypatch: pytest.MonkeyPatch) -> None:
     assert rc == 1
 
 
-def test_cli_strict_deps_blocks_run(monkeypatch: pytest.MonkeyPatch) -> None:
-    """--strict-deps 且依赖缺失时，不应该启动 pipeline，直接返回退出码 2。"""
+def test_cli_default_blocks_when_deps_missing(monkeypatch: pytest.MonkeyPatch) -> None:
+    """v0.3.0：默认 strict，依赖缺失时 pipeline 不应被调用，退出码 2。"""
     _uninstall_playwright(monkeypatch)
 
     called = {"run": False}
 
     def fake_run(*a: object, **kw: object) -> object:
         called["run"] = True
-        raise AssertionError("pipeline should not be invoked when strict-deps blocks")
+        raise AssertionError("pipeline should not be invoked when deps missing (strict default)")
 
     from qiq_html2md import __main__ as cli
 
@@ -182,15 +184,15 @@ def test_cli_strict_deps_blocks_run(monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(
         sys,
         "argv",
-        ["qiq-html2md", "--url", "https://example.com/a", "--strict-deps"],
+        ["qiq-html2md", "--url", "https://example.com/a"],
     )
     rc = cli.main()
     assert rc == 2
     assert called["run"] is False
 
 
-def test_cli_default_warn_does_not_block(monkeypatch: pytest.MonkeyPatch) -> None:
-    """默认 CLI 在依赖缺失时仅 warn，不阻塞 pipeline。"""
+def test_cli_skip_deps_check_bypasses_preflight(monkeypatch: pytest.MonkeyPatch) -> None:
+    """--skip-deps-check：即使依赖缺失也能启动 pipeline（CI 场景）。"""
     _uninstall_playwright(monkeypatch)
 
     class DummyResp:
@@ -202,6 +204,10 @@ def test_cli_default_warn_does_not_block(monkeypatch: pytest.MonkeyPatch) -> Non
     from qiq_html2md import __main__ as cli
 
     monkeypatch.setattr(cli, "run", lambda *a, **kw: DummyResp())
-    monkeypatch.setattr(sys, "argv", ["qiq-html2md", "--url", "https://example.com/a"])
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        ["qiq-html2md", "--url", "https://example.com/a", "--skip-deps-check"],
+    )
     rc = cli.main()
     assert rc == 0

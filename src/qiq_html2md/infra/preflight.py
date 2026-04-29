@@ -2,13 +2,8 @@
 
 只做**只读检查**，不启动任何浏览器实例、不修改全局状态，可安全地在任意时刻调用。
 
-目标依赖层
-----------
-- L1（硬依赖）：已在 `dependencies` 中声明，import 失败时 Python 会直接报错，
-  不在本模块范围内。
-- L2（效果增强）：
-  - `playwright` 包是否可 import
-  - Chromium 浏览器可执行文件是否已安装
+v0.3.0 起所有依赖（含 playwright / chromium）均为**强制依赖**。preflight
+报告用于在 CLI 启动时立即定位缺失并拒绝运行（strict 已是默认行为）。
 
 返回结构
 --------
@@ -40,7 +35,7 @@ class DepCheck:
     """单个依赖检查条目。"""
 
     name: str
-    level: Literal["L1", "L2"]
+    level: Literal["L1"]
     installed: bool
     detail: str = ""  # 成功/失败的说明
     install_hint: str = ""  # 安装指引（缺失时非空）
@@ -85,13 +80,10 @@ def _check_playwright_package() -> DepCheck:
     except ImportError as e:
         return DepCheck(
             name="playwright",
-            level="L2",
+            level="L1",
             installed=False,
             detail=f"import failed: {e}",
-            install_hint=(
-                "pip install 'qiq-html2md[recommended]'  "
-                "# 或仅安装浏览器能力：pip install 'qiq-html2md[browser]'"
-            ),
+            install_hint="pip install playwright  # 或 pip install qiq-html2md",
         )
     try:
         version = getattr(playwright, "__version__", "unknown")
@@ -99,7 +91,7 @@ def _check_playwright_package() -> DepCheck:
         version = "unknown"
     return DepCheck(
         name="playwright",
-        level="L2",
+        level="L1",
         installed=True,
         detail=f"version={version}",
     )
@@ -116,7 +108,7 @@ def _check_chromium_binary() -> DepCheck:
     except ImportError:
         return DepCheck(
             name="chromium",
-            level="L2",
+            level="L1",
             installed=False,
             detail="playwright package not installed (skipped)",
             install_hint=(
@@ -130,7 +122,7 @@ def _check_chromium_binary() -> DepCheck:
     except Exception as e:  # noqa: BLE001
         return DepCheck(
             name="chromium",
-            level="L2",
+            level="L1",
             installed=False,
             detail=f"failed to query executable_path: {e}",
             install_hint="playwright install chromium",
@@ -139,7 +131,7 @@ def _check_chromium_binary() -> DepCheck:
     if not exec_path:
         return DepCheck(
             name="chromium",
-            level="L2",
+            level="L1",
             installed=False,
             detail="executable_path is empty",
             install_hint="playwright install chromium",
@@ -149,7 +141,7 @@ def _check_chromium_binary() -> DepCheck:
     if not path.exists():
         return DepCheck(
             name="chromium",
-            level="L2",
+            level="L1",
             installed=False,
             detail=f"executable not found at {exec_path}",
             install_hint="playwright install chromium",
@@ -157,7 +149,7 @@ def _check_chromium_binary() -> DepCheck:
 
     return DepCheck(
         name="chromium",
-        level="L2",
+        level="L1",
         installed=True,
         detail=f"executable at {exec_path}",
     )
@@ -169,10 +161,11 @@ def _check_chromium_binary() -> DepCheck:
 
 
 def check_runtime_deps() -> PreflightReport:
-    """扫描 L2 运行时依赖，返回只读报告。
+    """扫描 L1 运行时依赖，返回只读报告。
 
-    L1 硬依赖已在 `dependencies` 中声明；若缺失，Python import 时会直接失败，
-    不进入本函数。
+    v0.3.0 起所有依赖均为 L1 强制依赖；若 Python 包 import 失败通常在模块加载
+    时就会 raise，本函数主要用于检查 Chromium 二进制是否就绪、以及给出明确
+    的可读报告。
     """
     checks: list[DepCheck] = [
         _check_playwright_package(),
@@ -188,20 +181,20 @@ def format_install_hints(report: PreflightReport) -> str:
     - 否则列出每一项缺失的依赖与对应命令。
     """
     if report.all_ok:
-        lines = ["[preflight] all optional runtime deps OK:"]
+        lines = ["[preflight] all required runtime deps OK:"]
         for c in report.checks:
             lines.append(f"  - {c.name} ({c.level}): {c.detail}")
         return "\n".join(lines)
 
     lines = [
-        "[preflight] 以下可选依赖缺失，部分增强功能将不可用：",
+        "[preflight] 以下**必需**依赖缺失，skill 拒绝启动：",
     ]
     for c in report.missing:
         lines.append(f"  - {c.name} ({c.level}): {c.detail}")
         if c.install_hint:
             lines.append(f"      修复：{c.install_hint}")
     lines.append("")
-    lines.append("一键安装推荐依赖：")
-    lines.append("  pip install 'qiq-html2md[recommended]'")
+    lines.append("一键安装所有必需依赖：")
+    lines.append("  pip install qiq-html2md")
     lines.append("  playwright install chromium")
     return "\n".join(lines)

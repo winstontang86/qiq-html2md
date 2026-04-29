@@ -214,20 +214,26 @@ def _rule_table(ctx: Context) -> RuleResult:
         return RuleResult("table", 100.0, False, None, "no enrich tables")
 
     # -- (c) 复杂表格未走图片降级 -------------------------------------------
-    damaged = 0
-    for t in tables:
-        score = int(t.get("complexity", 0))
-        mode = t.get("mode", "")
-        if score > 10 and mode != "image":
-            damaged += 1
-    if damaged > 0:
-        return RuleResult(
-            "table",
-            60.0,
-            False,
-            "complex_table_damaged",
-            f"damaged={damaged}",
-        )
+    # 仅在用户**显式**要求 `table_mode=image` 且实际没输出 image 时才判定为受损。
+    # auto 模式下复杂表格以 html 展示被视为合法降级，不再拖分。
+    requested_mode = ""
+    if ctx.strategy:
+        requested_mode = str(ctx.strategy.get("table_mode", ""))
+    if requested_mode == "image":
+        damaged = 0
+        for t in tables:
+            score = int(t.get("complexity", 0))
+            mode = t.get("mode", "")
+            if score > 10 and mode != "image":
+                damaged += 1
+        if damaged > 0:
+            return RuleResult(
+                "table",
+                60.0,
+                False,
+                "complex_table_damaged",
+                f"damaged={damaged}",
+            )
 
     # -- (d) markdown 转换失败 fallback 过多 --------------------------------
     warnings: list[dict[str, Any]] = ctx.warnings
@@ -260,6 +266,20 @@ def _rule_formula(ctx: Context) -> RuleResult:
     md = ""
     if ctx.emit and ctx.emit.get("markdown_text"):
         md = ctx.emit["markdown_text"]
+
+    # -- (a0) formula_pgf_leak：兜底检查 artifact.latex 里是否残留 TikZ/PGF ---
+    leaked = _count_pgf_leaks(formulas, md)
+    if leaked > 0:
+        # 单条 -30，上不封顶；>=3 条升 critical
+        score = max(0.0, 100.0 - leaked * 30.0)
+        is_critical = leaked >= 3
+        return RuleResult(
+            "formula",
+            score,
+            is_critical,
+            "formula_pgf_leak",
+            f"leaked={leaked}",
+        )
 
     # -- (a) formula_as_table：最优先，因为这是"完全错类型"的严重 bug ------
     fat_count = _count_formula_as_table(md)
@@ -381,6 +401,40 @@ def _count_formula_as_table(md: str) -> int:
             continue
         if _LATEX_CMD_RE.search(row):
             count += 1
+    return count
+
+
+# PGF/TikZ 渲染源码黑名单：命中任一即视为 latex 污染。
+_PGF_LEAK_MARKERS: tuple[str, ...] = (
+    r"\pgfsys@",
+    r"\pgfpicture",
+    r"\lxSVG",
+    r"\hbox to",
+    r"\leavevmode\hbox",
+)
+
+
+def _count_pgf_leaks(formulas: list[dict[str, Any]], md: str) -> int:
+    """统计 LaTeX 渲染源码泄漏数量。
+
+    - 检查 enrich.formulas 的 latex 字段是否含 pgf 特征；
+    - 另外扫描 md 里的 `$...$` / `$$...$$` 是否残留 pgf 片段（防御 enrich 未改动
+      但 md 侧仍被污染的情形）。
+    两个维度取并集计数；重复命中只算一次不展开。
+    """
+    count = 0
+    for f in formulas:
+        tex = (f.get("latex") or "").strip()
+        if tex and any(marker in tex for marker in _PGF_LEAK_MARKERS):
+            count += 1
+    # md 侧兜底扫描
+    if md:
+        for block in re.findall(r"\$\$(.+?)\$\$", md, flags=re.DOTALL):
+            if any(m in block for m in _PGF_LEAK_MARKERS):
+                count += 1
+        for inline in re.findall(r"(?<!\$)\$([^$\n]{3,})\$(?!\$)", md):
+            if any(m in inline for m in _PGF_LEAK_MARKERS):
+                count += 1
     return count
 
 

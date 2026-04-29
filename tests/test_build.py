@@ -49,9 +49,11 @@ def test_zip_contains_required_files(clean_dist: Path) -> None:
         f"{top}/dist_info.json",
         f"{top}/schemas/request.schema.json",
         f"{top}/schemas/response.schema.json",
-        f"{top}/src/qiq_html2md/__main__.py",
-        f"{top}/src/qiq_html2md/core/pipeline.py",
-        f"{top}/src/qiq_html2md/stages/acquire.py",
+        # build.py 故意把 src/qiq_html2md/ 平铺到顶层 qiq_html2md/，
+        # 便于宿主直接 `python -m qiq_html2md`（不需要 PYTHONPATH=src）
+        f"{top}/qiq_html2md/__main__.py",
+        f"{top}/qiq_html2md/core/pipeline.py",
+        f"{top}/qiq_html2md/stages/acquire.py",
     ]
     for rq in required:
         assert rq in names, f"missing: {rq}"
@@ -135,14 +137,16 @@ def test_requirements_txt_has_base_deps(clean_dist: Path) -> None:
         req = zf.read(f"{top}/requirements.txt").decode()
     assert "httpx" in req
     assert "pydantic" in req
-    # browser extras 作为注释存在
-    assert "# playwright" in req
+    # v0.3.0：playwright 已提升为硬依赖，直接出现在 deps 列表中（不再注释）
+    assert "playwright" in req
+    # 仍应提醒用户下载 chromium 二进制
+    assert "playwright install chromium" in req
 
 
 def test_package_is_self_contained_and_runnable(
     clean_dist: Path, tmp_path: Path
 ) -> None:
-    """解压 zip 到空目录，用 PYTHONPATH 指向 src 就能跑 smoke。"""
+    """解压 zip 到空目录，直接就能跑 smoke（无需 PYTHONPATH）。"""
     zip_path = build_mod.build(output_dir=clean_dist, with_tests=False, with_docs=False)
 
     install_dir = tmp_path / "install"
@@ -151,9 +155,8 @@ def test_package_is_self_contained_and_runnable(
         zf.extractall(install_dir)
     top = next(install_dir.iterdir())  # <name>-<version>/
 
-    # 关键点：src 路径能被 import
-    src_dir = top / "src"
-    assert (src_dir / "qiq_html2md" / "__main__.py").is_file()
+    # 关键点：qiq_html2md/ 顶层布局（build.py 会剥掉 src/ 前缀）
+    assert (top / "qiq_html2md" / "__main__.py").is_file()
 
     import subprocess
     import sys
@@ -161,13 +164,14 @@ def test_package_is_self_contained_and_runnable(
     fixture = Path(__file__).parent / "fixtures" / "arxiv_sample.html"
     out_dir = tmp_path / "out"
     env = os.environ.copy()
-    env["PYTHONPATH"] = str(src_dir) + os.pathsep + env.get("PYTHONPATH", "")
+    env["PYTHONPATH"] = str(top) + os.pathsep + env.get("PYTHONPATH", "")
     env["QIQ_HTML2MD_CACHE_DIR"] = str(tmp_path / "cache")
     result = subprocess.run(
         [
             sys.executable,
             "-m",
             "qiq_html2md",
+            "--skip-deps-check",
             "--allow-file-scheme",
             "--url",
             f"file://{fixture}",

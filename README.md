@@ -5,16 +5,10 @@
 ## 快速开始
 
 ```bash
-# 基础安装（L1 硬依赖，适合只处理纯静态论文页面的场景）
+# 完整安装（所有依赖都是必需 L1 —— v0.3.0 起 playwright 已从 L2 升级为 L1）
 uv sync --extra dev
 source .venv/bin/activate
-
-# 推荐安装（L1 + L2：Playwright 浏览器渲染/截图降级，效果更好）
-uv sync --extra dev --extra recommended
-.venv/bin/playwright install chromium
-
-# 或者仅装 browser 能力（与 recommended 等价）
-uv sync --extra dev --extra browser
+.venv/bin/playwright install chromium     # 必做：下载 Chromium 二进制
 
 # 运行测试
 pytest
@@ -42,23 +36,26 @@ python -m qiq_html2md.build --no-docs        # 不带 docs/
 SOURCE_DATE_EPOCH=1700000000 python -m qiq_html2md.build  # 可复现构建（字节级一致）
 ```
 
-## 依赖分层
+## 依赖
 
-| 层级 | 内容 | 必要性 | 安装 |
-|------|------|------|------|
-| **L1 硬依赖** | `httpx` / `lxml` / `beautifulsoup4` / `readability-lxml` / `pydantic` / `python-ulid` | 必需（无则无法启动） | 自动随 `pip install qiq-html2md` 装上 |
-| **L2 效果增强** | `playwright` + Chromium 浏览器 | 强烈推荐：启用 JS 渲染页面、复杂表格/公式**截图降级**、懒加载图滚动触发 | `pip install 'qiq-html2md[recommended]'`（或 `[browser]`）+ `playwright install chromium` |
+**v0.3.0 起所有依赖都是必需 L1**（不再区分 L2 可选）。安装方式永远是两步走：
 
-**缺 L2 时的影响**：纯静态论文（如 arXiv HTML）依然可转换；但含复杂表格（复杂度>10）的页面无法走截图降级，会停留在 HTML 内嵌输出并触发 quality warning；JS 渲染页面会抓到空白 HTML。
+| 依赖 | 安装 |
+|------|------|
+| Python 包（含 `playwright`） | `pip install qiq-html2md` 自动拉全 |
+| Chromium 浏览器二进制 | `playwright install chromium` —— **pip 无法自动触发，必须单独执行** |
+
+完整清单：`httpx` / `lxml` / `beautifulsoup4` / `readability-lxml` / `pydantic` / `python-ulid` / `playwright`。
+
+**任何依赖缺失时，CLI 默认拒绝启动**（strict 是默认行为）；详见下一节。
 
 ## 运行时依赖检查
 
-每次启动 CLI 时会自动做一次轻量预检（只查 Python 包与 Chromium 二进制路径，不启动浏览器）：
+每次启动 CLI 都会自动做一次轻量预检（只查 Python 包与 Chromium 二进制路径，不启动浏览器）：
 
-- 默认：缺失仅 warn 到 stderr 并给出 `pip install` / `playwright install` 指引，**不阻塞**流程。
-- `--strict-deps`：缺失直接退出码 2，不启动管线（适合 CI 与自动化场景强制校验）。
+- **默认（strict）**：缺失直接退出码 2，**不启动** pipeline。stderr 会列出每项缺失 + 修复命令。
 - `--check-deps`：仅跑预检后退出（0=全齐，1=缺失），不执行转换。
-- `--skip-deps-check`：跳过启动预检（适合已确认依赖齐全、想节省 ~50ms 的场景）。
+- `--skip-deps-check`：跳过启动预检（仅适合 CI 已确认齐全、想节省 ~50ms 的场景）。
 
 ## 关键能力
 

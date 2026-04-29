@@ -1,11 +1,13 @@
 [project]
 name = "qiq-html2md"
-version = "0.2.1"
+version = "0.3.0"
 description = "HTML 页面转 Markdown 的通用 skill，面向论文类材料"
 readme = "README.md"
 requires-python = ">=3.10"
 license = { text = "MIT" }
 authors = [{ name = "laotang" }]
+# L1 强制依赖：pip install 时必装；L2 概念已废弃。
+# 浏览器二进制需额外执行 `playwright install chromium`（pip 无法触发）。
 dependencies = [
     "httpx>=0.27",
     "lxml>=5.2",
@@ -13,6 +15,7 @@ dependencies = [
     "readability-lxml>=0.8.1",
     "pydantic>=2.7",
     "python-ulid>=2.2",
+    "playwright>=1.45",
 ]
 
 [project.optional-dependencies]
@@ -22,13 +25,9 @@ dev = [
     "ruff>=0.5",
     "mypy>=1.10",
 ]
-browser = [
-    "playwright>=1.45",
-]
-# 推荐一键安装别名：等价于 browser，后续若新增更多效果层依赖再聚合到这里
-recommended = [
-    "playwright>=1.45",
-]
+# 兼容旧命令：browser/recommended 仍可用，但 playwright 已在 dependencies 中强制。
+browser = []
+recommended = []
 
 [project.scripts]
 qiq-html2md = "qiq_html2md.__main__:main"

@@ -130,7 +130,7 @@ class EmitStage:
 
 
 def _build_artifact_map(enrich: dict[str, Any]) -> dict[str, dict[str, Any]]:
-    """把 enrich.{images,tables,formulas} 扁平化为 id → artifact。"""
+    """把 enrich.{images,tables,formulas,algorithms} 扁平化为 id → artifact。"""
     out: dict[str, dict[str, Any]] = {}
     for img in enrich.get("images", []):
         aid = img.get("id")
@@ -144,6 +144,11 @@ def _build_artifact_map(enrich: dict[str, Any]) -> dict[str, dict[str, Any]]:
         aid = f.get("id")
         if aid:
             out[aid] = {"kind": "formula", **f}
+    for a in enrich.get("algorithms", []):
+        aid = a.get("id")
+        if aid:
+            # 算法 artifact 自身已带 kind=algorithm，显式覆盖保底
+            out[aid] = {"kind": "algorithm", **a}
     return out
 
 
@@ -362,6 +367,12 @@ def _render_artifact(art: dict[str, Any], *, inline: bool = False) -> str:
             return mml
         # 既无 LaTeX 也无 MathML 源（mjx-container 占位等）：输出占位注释
         return "<!-- formula source unavailable -->"
+    if kind == "algorithm":
+        title = art.get("title") or ""
+        lines = art.get("lines") or []
+        header = f"### {title}\n\n" if title else ""
+        body = "\n".join(lines)
+        return f"{header}```\n{body}\n```"
     return ""
 
 

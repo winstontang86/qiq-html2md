@@ -1,4 +1,10 @@
-# html2md Skill
+---
+name: qiq-html2md
+version: 0.3.0
+description: 高保真论文类 HTML 到 Markdown 转换 skill。
+---
+
+# qiq-html2md
 
 一个面向**论文类 HTML 页面**的高保真 Markdown 转换 skill，支持 WorkBuddy / OpenClaw / CLI / MCP 等智能体宿主复用。
 
