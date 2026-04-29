@@ -2,7 +2,7 @@
 
 用法
 ----
-    python -m html2md_skill.build [--output dist/] [--with-tests] [--no-docs] [--name html2md]
+    python -m html2md_skill.build [--output dist/] [--with-tests] [--with-docs] [--name html2md]
 
 产物
 ----
@@ -13,15 +13,13 @@
     <name>-<version>/
       SKILL.md                     # 宿主发现入口
       manifest.yaml                # 机读声明
-      README.md
-      LICENSE
       requirements.txt             # 运行时最小依赖（browser/otel 作为 extras 注释）
       dist_info.json               # 版本 / 构建时间 / SHA-256 清单
       schemas/
         request.schema.json
         response.schema.json
       src/html2md_skill/**         # 全部源码（不含 __pycache__）
-      docs/**                      # 默认包含，--no-docs 关闭
+      docs/**                      # --with-docs 开启时
       tests/**                     # --with-tests 开启时
 
 设计原则
@@ -30,7 +28,7 @@
 - **可复现**：ZIP 按文件名排序、mtime 固定为 1980-01-01、压缩级别固定。
   `SOURCE_DATE_EPOCH` 环境变量可覆盖 built_at（标准 reproducible-builds 实践）。
 - **可校验**：`dist_info.json` 带每个文件的 SHA-256；宿主可重算比对。
-- **瘦身**：默认不带 `tests/`、`.venv/` 与所有缓存。
+- **瘦身**：默认不带 `docs/`、`tests/`、`.venv/` 与所有缓存。
 """
 
 from __future__ import annotations
@@ -158,13 +156,10 @@ def _assemble_content_list(
     """返回 (源文件绝对路径, zip 内相对路径) 列表。"""
     items: list[tuple[Path, str]] = []
 
-    # 必选文件
+    # 必选文件（运行时依赖，不含文档/构建配置）
     roots = {
         "SKILL.md": project_root / "SKILL.md",
         "manifest.yaml": project_root / "manifest.yaml",
-        "README.md": project_root / "README.md",
-        "LICENSE": project_root / "LICENSE",
-        "pyproject.toml": project_root / "pyproject.toml",
     }
     for dest, src in roots.items():
         if src.is_file():
@@ -199,7 +194,7 @@ def build(
     *,
     output_dir: Path | None = None,
     with_tests: bool = False,
-    with_docs: bool = True,
+    with_docs: bool = False,
     name: str = "html2md-skill",
     project_root: Path = PROJECT_ROOT,
 ) -> Path:
@@ -302,9 +297,9 @@ def main(argv: list[str] | None = None) -> int:
         help="包含 tests/ 目录（默认不包含）",
     )
     parser.add_argument(
-        "--no-docs",
+        "--with-docs",
         action="store_true",
-        help="不包含 docs/（默认包含）",
+        help="包含 docs/ 目录（默认不包含）",
     )
     parser.add_argument(
         "--name",
@@ -322,7 +317,7 @@ def main(argv: list[str] | None = None) -> int:
     zip_path = build(
         output_dir=args.output,
         with_tests=args.with_tests,
-        with_docs=not args.no_docs,
+        with_docs=args.with_docs,
         name=args.name,
         project_root=args.project_root,
     )
