@@ -671,6 +671,53 @@ def _escape_md_cell(s: str) -> str:
 # ---------------------------------------------------------------------------
 
 
+def _resolve_image_url(base_url: str, src: str) -> str:
+    """将图片 src 解析为绝对 URL。
+
+    修复 urljoin 对 "目录式" base_url 不带尾斜杠时把最后一段当文件名替换掉的问题。
+
+    arXiv 的两类页面：
+      A) base="https://arxiv.org/html/2501.05366v1",  src="x1.png"
+         -> 期望 "https://arxiv.org/html/2501.05366v1/x1.png"
+         （标准 urljoin 会错误产出 ".../html/x1.png"）
+      B) base="https://arxiv.org/html/2604.21691v1",  src="2604.21691v1/x1.png"
+         -> 期望 "https://arxiv.org/html/2604.21691v1/x1.png"
+         （标准 urljoin 恰好正确，因为 v1 被替换为 src 路径）
+
+    策略（保留既有正确行为 + 修复 A 类）：
+      - 绝对 URL / 协议相对 / 站点绝对路径：走原 urljoin
+      - 若 src 以 base 的末段（例如 "2604.21691v1/..."）开头，说明源 HTML 已在 src 中
+        嵌入了"兄弟级"前缀，走原 urljoin（B 类）
+      - 否则，把 base 看作目录（末段不像文件名时追加 '/'），再 urljoin（A 类）
+    """
+    if not src:
+        return src
+    parsed_src = urlparse(src)
+    if parsed_src.scheme or src.startswith("//") or src.startswith("/"):
+        return urljoin(base_url, src)
+
+    parsed_base = urlparse(base_url)
+    path = parsed_base.path or ""
+    if not path or path.endswith("/"):
+        # base 已经是目录形式，直接 urljoin
+        return urljoin(base_url, src)
+
+    last_seg = path.rsplit("/", 1)[-1]
+    # 若 src 的首个路径段等于 base 末段，说明 src 采用"兄弟级相对路径"（B 类），
+    # 保持原 urljoin 行为（会把 last_seg 替换为 src）
+    src_first = src.split("/", 1)[0]
+    if last_seg and src_first == last_seg:
+        return urljoin(base_url, src)
+
+    # 判定 base 末段是否像文件名（含常见扩展名）。若像文件名，保持 urljoin 原语义。
+    _FILE_EXT_RE = re.compile(r"\.[A-Za-z0-9]{1,5}$")
+    if _FILE_EXT_RE.search(last_seg):
+        return urljoin(base_url, src)
+
+    # A 类：把 base 视为目录，补尾斜杠再解析
+    return urljoin(base_url + "/", src)
+
+
 def _process_images(
     soup: BeautifulSoup,
     *,
@@ -690,7 +737,7 @@ def _process_images(
             warnings.append({"code": "image_no_src", "idx": idx})
             continue
 
-        abs_url = urljoin(base_url, src)
+        abs_url = _resolve_image_url(base_url, src)
         alt = str_attr(img, "alt").strip()
 
         iid = f"i{idx:03d}"

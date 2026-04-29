@@ -522,10 +522,21 @@ def resolve(url: str) -> SiteAdapter:
 |---|---|---|
 | `infra/http.py` | 连接复用 + SSRF 护栏 + ETag + 大小限制 | `http.get(url) -> HttpResponse` |
 | `infra/fs_sandbox.py` | 统一写操作；禁 `..`、符号链接 | `fs.write(relpath, data)` |
+| `infra/browser.py` | Playwright 驱动抽象（L2 可选依赖） | `get_driver().render(url)` / `screenshot_nodes(html, selectors)` |
+| `infra/browser_pool.py` | Chromium 进程单例与 context 复用 | `get_pool()` / `reset_pool()` |
+| `infra/cache.py` | HTTP 级 + 抽取级两级缓存 | `HttpCacheEntry` / `make_extract_key` |
+| `infra/preflight.py` | 运行时依赖**只读预检**（Playwright 包 + Chromium 二进制） | `check_runtime_deps() -> PreflightReport` / `format_install_hints(report)` |
 
 SSRF 黑名单：`127.0.0.0/8 · 10.0.0.0/8 · 172.16.0.0/12 · 192.168.0.0/16 · 169.254.0.0/16 · ::1/128 · fc00::/7`。
 
-> **r3 砍掉了 `cache.py` 和 `browser_pool.py`**：首版单次任务为主，浏览器每次启一次，不做跨任务缓存；阶段五（批量/反复调试场景）再加回来。
+**依赖分层与 preflight 契约**：
+
+- **L1 硬依赖**（httpx / lxml / bs4 / readability-lxml / pydantic / python-ulid）—— 由 `pyproject.toml.dependencies` 声明；缺失将在 Python import 时直接失败，非 preflight 范围。
+- **L2 效果增强依赖**（playwright + Chromium）—— 由 `[project.optional-dependencies].browser` / `recommended` 声明；缺失时纯静态页面仍可转换，但 JS 渲染与复杂表格/公式截图降级不可用。
+- **preflight 是只读的**：不启动浏览器、不修改任何全局状态，只做包 import 与可执行文件 `Path.exists()` 检查。
+- CLI 默认在启动前做一次 preflight，缺失仅 warn 不阻塞；`--strict-deps` 切换为硬失败；`--check-deps` 仅跑预检后退出；`--skip-deps-check` 跳过预检（CI 场景）。
+
+> **r3 的"砍 cache/browser_pool"说明仅适用于 MVP 阶段；阶段五之后这两个模块已回归**，preflight 为阶段六新增。
 
 ---
 
@@ -560,9 +571,13 @@ qiq_html2md/
 
   quality.py                   # 规则 + 评分合一（单文件）
 
-  infra/                       # L4 基础设施（仅两个）
-    http.py
-    fs_sandbox.py
+  infra/                       # L4 基础设施
+    http.py                    # SSRF + ETag
+    fs_sandbox.py              # 路径穿越防护
+    browser.py                 # Playwright 驱动抽象（L2 可选）
+    browser_pool.py            # Chromium 进程单例
+    cache.py                   # HTTP + 抽取两级缓存
+    preflight.py               # L2 依赖只读预检
 
   obs/                         # 可观测横切层
     events.py                  # 总线 + 落盘 + trace + 快照 sink

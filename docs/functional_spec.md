@@ -356,3 +356,46 @@ URL 安全：
 - 所有日志、事件、指标、快照共享同一 `trace_id`。
 - 失败或 `status=degraded` 时自动升级到 `debug=full` 并生成完整诊断包。
 - 详细规范见 `/Users/winstontang/code/github/qiq-html2md/docs/observability.md`。
+
+## 11. 运行时依赖
+
+### 11.1 依赖分层
+
+| 层级 | 内容 | 必要性 | 缺失影响 |
+|------|------|------|----------|
+| **L1** | `httpx` / `lxml` / `beautifulsoup4` / `readability-lxml` / `pydantic` / `python-ulid` | 硬依赖（装不上就无法启动） | Python import 报错 |
+| **L2** | `playwright>=1.45` + Chromium 二进制 | 效果增强（强烈推荐） | JS 渲染页面抓到空白；复杂表格无法截图降级，质量分上限受限；无法触发懒加载滚动 |
+
+L1 由 `pyproject.toml` 的 `dependencies` 声明，随 `pip install qiq-html2md` 自动安装。
+L2 由 `[project.optional-dependencies].browser` 与其友好别名 `recommended` 声明。
+
+### 11.2 一键安装命令
+
+```bash
+# 基础安装（仅 L1，可处理纯静态论文）
+pip install qiq-html2md
+
+# 推荐安装（L1 + L2）
+pip install 'qiq-html2md[recommended]'
+playwright install chromium
+```
+
+### 11.3 运行时预检契约
+
+Skill 启动时自动执行**只读**依赖预检，行为如下：
+
+| CLI 开关 | 行为 | 退出码语义 |
+|---------|------|-----------|
+| 默认 | 缺失仅 warn 到 stderr + 写 `_diag/preflight.json`，不阻塞管线 | 与管线一致（0/1/2） |
+| `--strict-deps` | 缺失直接硬失败，不启动管线 | 依赖缺失时返回 `2` |
+| `--check-deps` | 仅跑预检后退出，不执行转换 | 全齐返回 `0`，缺失返回 `1` |
+| `--skip-deps-check` | 跳过启动预检（适合 CI 已确认依赖齐全） | 与管线一致 |
+
+预检覆盖项：
+- Playwright 包是否可 import
+- Playwright 报告的 Chromium 可执行文件是否存在
+
+预检规则：
+- 不启动任何浏览器实例，仅查询路径并做 `Path.exists()`。
+- 所有失败都带有 `install_hint` 字段，指明精确的修复命令。
+- 报告可序列化为 JSON 供宿主 agent 解析（字段：`all_ok` / `checks[].name` / `checks[].level` / `checks[].installed` / `checks[].detail` / `checks[].install_hint`）。

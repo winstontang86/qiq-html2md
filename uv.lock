@@ -891,7 +891,7 @@ wheels = [
 
 [[package]]
 name = "qiq-html2md"
-version = "0.2.0"
+version = "0.2.1"
 source = { editable = "." }
 dependencies = [
     { name = "beautifulsoup4" },
@@ -912,6 +912,9 @@ dev = [
     { name = "pytest-cov" },
     { name = "ruff" },
 ]
+recommended = [
+    { name = "playwright" },
+]
 
 [package.metadata]
 requires-dist = [
@@ -920,6 +923,7 @@ requires-dist = [
     { name = "lxml", specifier = ">=5.2" },
     { name = "mypy", marker = "extra == 'dev'", specifier = ">=1.10" },
     { name = "playwright", marker = "extra == 'browser'", specifier = ">=1.45" },
+    { name = "playwright", marker = "extra == 'recommended'", specifier = ">=1.45" },
     { name = "pydantic", specifier = ">=2.7" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=8.0" },
     { name = "pytest-cov", marker = "extra == 'dev'", specifier = ">=5.0" },
@@ -927,7 +931,7 @@ requires-dist = [
     { name = "readability-lxml", specifier = ">=0.8.1" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.5" },
 ]
-provides-extras = ["dev", "browser"]
+provides-extras = ["dev", "browser", "recommended"]
 
 [[package]]
 name = "readability-lxml"

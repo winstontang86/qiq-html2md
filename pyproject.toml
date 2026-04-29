@@ -1,6 +1,6 @@
 [project]
 name = "qiq-html2md"
-version = "0.2.0"
+version = "0.2.1"
 description = "HTML 页面转 Markdown 的通用 skill，面向论文类材料"
 readme = "README.md"
 requires-python = ">=3.10"
@@ -23,6 +23,10 @@ dev = [
     "mypy>=1.10",
 ]
 browser = [
+    "playwright>=1.45",
+]
+# 推荐一键安装别名：等价于 browser，后续若新增更多效果层依赖再聚合到这里
+recommended = [
     "playwright>=1.45",
 ]
 

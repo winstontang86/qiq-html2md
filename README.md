@@ -5,13 +5,16 @@
 ## 快速开始
 
 ```bash
-# 安装基础依赖
+# 基础安装（L1 硬依赖，适合只处理纯静态论文页面的场景）
 uv sync --extra dev
 source .venv/bin/activate
 
-# 可选：装浏览器支持（Playwright）
-uv sync --extra dev --extra browser
+# 推荐安装（L1 + L2：Playwright 浏览器渲染/截图降级，效果更好）
+uv sync --extra dev --extra recommended
 .venv/bin/playwright install chromium
+
+# 或者仅装 browser 能力（与 recommended 等价）
+uv sync --extra dev --extra browser
 
 # 运行测试
 pytest
@@ -29,12 +32,33 @@ python -m qiq_html2md --allow-file-scheme \
 # 从 JSON 请求读入
 echo '{"url":"https://arxiv.org/html/2501.xxx","output_dir":"./output"}' | python -m qiq_html2md -
 
+# 仅做依赖预检（不跑转换）
+python -m qiq_html2md --check-deps            # 退出码 0=全齐，1=缺失
+
 # 构建可安装的 skill zip 包（供 agent 宿主分发）
 python -m qiq_html2md.build                  # 默认 dist/qiq-html2md-<version>.zip
 python -m qiq_html2md.build --with-tests     # 附带 tests/
 python -m qiq_html2md.build --no-docs        # 不带 docs/
 SOURCE_DATE_EPOCH=1700000000 python -m qiq_html2md.build  # 可复现构建（字节级一致）
 ```
+
+## 依赖分层
+
+| 层级 | 内容 | 必要性 | 安装 |
+|------|------|------|------|
+| **L1 硬依赖** | `httpx` / `lxml` / `beautifulsoup4` / `readability-lxml` / `pydantic` / `python-ulid` | 必需（无则无法启动） | 自动随 `pip install qiq-html2md` 装上 |
+| **L2 效果增强** | `playwright` + Chromium 浏览器 | 强烈推荐：启用 JS 渲染页面、复杂表格/公式**截图降级**、懒加载图滚动触发 | `pip install 'qiq-html2md[recommended]'`（或 `[browser]`）+ `playwright install chromium` |
+
+**缺 L2 时的影响**：纯静态论文（如 arXiv HTML）依然可转换；但含复杂表格（复杂度>10）的页面无法走截图降级，会停留在 HTML 内嵌输出并触发 quality warning；JS 渲染页面会抓到空白 HTML。
+
+## 运行时依赖检查
+
+每次启动 CLI 时会自动做一次轻量预检（只查 Python 包与 Chromium 二进制路径，不启动浏览器）：
+
+- 默认：缺失仅 warn 到 stderr 并给出 `pip install` / `playwright install` 指引，**不阻塞**流程。
+- `--strict-deps`：缺失直接退出码 2，不启动管线（适合 CI 与自动化场景强制校验）。
+- `--check-deps`：仅跑预检后退出（0=全齐，1=缺失），不执行转换。
+- `--skip-deps-check`：跳过启动预检（适合已确认依赖齐全、想节省 ~50ms 的场景）。
 
 ## 关键能力
 
@@ -126,13 +150,15 @@ qiq-html2md-<version>/
 unzip qiq-html2md-0.1.0.zip
 cd qiq-html2md-0.1.0
 
-# 2. 装依赖
+# 2. 装依赖（L1 基础）
 pip install -r requirements.txt
-# 需要浏览器渲染？
+# 推荐：装 L2 浏览器能力以启用完整效果（复杂表格截图降级、JS 渲染）
 # pip install 'playwright>=1.45' && playwright install chromium
 
 # 3. 运行
 PYTHONPATH=src python -m qiq_html2md --url "..." --output-dir ./out
+# 运行前检查依赖：
+PYTHONPATH=src python -m qiq_html2md --check-deps
 ```
 
 ### 校验
