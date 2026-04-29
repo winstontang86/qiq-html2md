@@ -222,24 +222,38 @@ def _walk_block(node: Any, artifacts: dict[str, dict[str, Any]]) -> str:
         return f"```\n{code}\n```"
 
     if name == "figure":
-        # figure 内可能同时有 img（带锚点）和 figcaption
-        img = node.find("img")
+        # figure 可能包含 img / table / figcaption。保持出现顺序地渲染其中的子块。
         caption_tag = node.find("figcaption")
         parts: list[str] = []
-        img_md = ""
-        if isinstance(img, Tag):
-            img_aid = img.get(ANCHOR_ATTR) if isinstance(img.get(ANCHOR_ATTR), str) else None
-            if img_aid and img_aid in artifacts:
-                img_md = _render_artifact(artifacts[img_aid])
-            else:
-                img_md = _img_fallback(img)
-        if img_md:
-            parts.append(img_md)
+        for c in node.children:
+            if not isinstance(c, Tag):
+                continue
+            cname = c.name.lower()
+            if cname == "figcaption":
+                continue  # 放到最后统一处理，保持原 caption 位置贴近内容
+            if cname == "img":
+                img_aid = c.get(ANCHOR_ATTR) if isinstance(c.get(ANCHOR_ATTR), str) else None
+                if img_aid and img_aid in artifacts:
+                    parts.append(_render_artifact(artifacts[img_aid]))
+                else:
+                    parts.append(_img_fallback(c))
+                continue
+            if cname == "table":
+                tbl_aid = c.get(ANCHOR_ATTR) if isinstance(c.get(ANCHOR_ATTR), str) else None
+                if tbl_aid and tbl_aid in artifacts:
+                    parts.append(_render_artifact(artifacts[tbl_aid]))
+                else:
+                    parts.append(str(c))
+                continue
+            # 其他元素（div/p 等）递归
+            sub = _walk_block(c, artifacts)
+            if sub:
+                parts.append(sub)
         if isinstance(caption_tag, Tag):
             cap_text = caption_tag.get_text(" ", strip=True)
             if cap_text:
                 parts.append(f"*{cap_text}*")
-        return "\n\n".join(parts)
+        return "\n\n".join(p for p in parts if p)
 
     # 表格节点若未命中锚点，直接用原始 HTML 作为兜底
     if name == "table":

@@ -1,6 +1,6 @@
 [project]
 name = "qiq-html2md"
-version = "0.1.0"
+version = "0.2.0"
 description = "HTML 页面转 Markdown 的通用 skill，面向论文类材料"
 readme = "README.md"
 requires-python = ">=3.10"

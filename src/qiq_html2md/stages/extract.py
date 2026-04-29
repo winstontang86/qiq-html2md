@@ -99,12 +99,34 @@ class ExtractStage:
 
         # 5. 提取统计
         text = soup.get_text(" ", strip=True)
+        # 过滤掉 ltx_equation / ltx_equationgroup / ltx_eqn_table 这类"公式包装表"，
+        # 与 Enrich 的 formula 处理保持一致，避免 quality 阶段表格计数被公式污染。
+        _eq_cls = ("ltx_equation", "ltx_equationgroup", "ltx_eqn_table")
+        real_tables = [
+            t
+            for t in soup.find_all("table")
+            if isinstance(t, Tag)
+            and not any(k in class_str(t).lower() for k in _eq_cls)
+        ]
+        # figure 内包含真表格的 figure 数量（典型 arxiv <figure class="ltx_table">）
+        figure_with_table = 0
+        for f in soup.find_all("figure"):
+            if not isinstance(f, Tag):
+                continue
+            inner = f.find("table")
+            if (
+                isinstance(inner, Tag)
+                and not any(k in class_str(inner).lower() for k in _eq_cls)
+            ):
+                figure_with_table += 1
         stats = {
             "text_len": len(text),
             "heading_count": len(soup.find_all(["h1", "h2", "h3", "h4", "h5", "h6"])),
             "paragraph_count": len(soup.find_all("p")),
             "image_count": len(soup.find_all("img")),
             "link_count": len(soup.find_all("a")),
+            "table_count": len(real_tables),
+            "figure_with_table_count": figure_with_table,
             "profile_used": profile,
             "clean_rules_used": list(clean_rules),
         }

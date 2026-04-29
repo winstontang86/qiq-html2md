@@ -83,7 +83,7 @@ def test_dist_info_contents(clean_dist: Path) -> None:
         data = json.loads(zf.read(f"{top}/dist_info.json"))
 
     assert data["name"] == "qiq-html2md"
-    assert data["version"] == "0.1.0"
+    assert data["version"] == build_mod._read_version()
     assert data["entrypoint"] == "python -m qiq_html2md"
     assert data["skill_manifest"] == "manifest.yaml"
     assert data["file_count"] >= 20

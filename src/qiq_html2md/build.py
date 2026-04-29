@@ -18,7 +18,7 @@
       schemas/
         request.schema.json
         response.schema.json
-      src/qiq_html2md/**         # 全部源码（不含 __pycache__）
+      qiq_html2md/**             # 全部源码（不含 __pycache__，无 src/ 前缀）
       docs/**                      # --with-docs 开启时
       tests/**                     # --with-tests 开启时
 
@@ -169,9 +169,11 @@ def _assemble_content_list(
     for p in _walk_files(project_root / "schemas"):
         items.append((p, str(Path("schemas") / p.relative_to(project_root / "schemas"))))
 
-    # src/
-    for p in _walk_files(project_root / "src"):
-        items.append((p, str(Path("src") / p.relative_to(project_root / "src"))))
+    # src/qiq_html2md/ -> qiq_html2md/ （运行时不需要 src/ 前缀）
+    src_root = project_root / "src"
+    for p in _walk_files(src_root):
+        rel = p.relative_to(src_root)
+        items.append((p, str(rel)))
 
     if with_docs:
         docs_root = project_root / "docs"

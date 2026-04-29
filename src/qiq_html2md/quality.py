@@ -1,4 +1,4 @@
-"""质量规则 + 评分（阶段三·完整版）。
+"""质量规则 + 评分（阶段三·完整版 + v0.2 增强）。
 
 六条规则对应架构文档 §9.2 权重：
 - text (0.30)
@@ -14,10 +14,18 @@
 failure_reason 对应架构文档 §9.3 的失败原因键（驱动 plan_retry）。
 sub_score < 70 视为 failed_rules；is_critical=True 视为 critical_failures。
 通过条件：final_score >= 80 AND critical_failures == []。
+
+v0.2 增强：
+- table 规则新增 table_retention_low（extract vs enrich artifact 对账）
+  与 table_in_figure_dropped（figure 内嵌表格在 md 中完全不可见）。
+- formula 规则新增 formula_mathml_garbage（公式里 LaTeX 命令与 MathML
+  Unicode 数学字母共存的双写乱码）、formula_as_table（公式被误判为
+  markdown 表格）与 latex_source_missing（mode=latex 却无 latex 源）。
 """
 
 from __future__ import annotations
 
+import re
 from collections.abc import Callable
 from dataclasses import dataclass
 from typing import Any, Literal
@@ -149,16 +157,63 @@ def _rule_image(ctx: Context) -> RuleResult:
 
 
 def _rule_table(ctx: Context) -> RuleResult:
-    """表格保留率 + 复杂表格保真。"""
+    """表格保真度：
+
+    - 保留率：`extract.table_count` vs Enrich artifact 数量。<80% 视为丢失。
+    - figure 内嵌表格检测：`extract.figure_with_table_count` 大于 0 且 md 中
+      既无 markdown 表格块也无 `<table` 裸标签 → table_in_figure_dropped。
+    - 复杂表格保真：score>10 但 mode!=image。
+    - markdown→html 降级占比过高。
+    """
     tables = []
     if ctx.enrich:
         tables = ctx.enrich.get("tables", [])
-    if not tables:
+
+    extract_stats: dict[str, Any] = {}
+    if ctx.extract:
+        extract_stats = ctx.extract.get("extract_stats", {}) or {}
+    extract_count = int(extract_stats.get("table_count", 0))
+    figure_with_table = int(extract_stats.get("figure_with_table_count", 0))
+
+    md = ""
+    if ctx.emit and ctx.emit.get("markdown_text"):
+        md = ctx.emit["markdown_text"]
+
+    # -- (a) figure 内嵌表格全部丢失：md 里完全找不到表格内容 ----------------
+    if figure_with_table > 0:
+        has_md_table = bool(re.search(r"(?m)^\s*\|.+\|\s*$", md))
+        has_html_table = "<table" in md.lower()
+        if not has_md_table and not has_html_table:
+            return RuleResult(
+                "table",
+                0.0,
+                True,
+                "table_in_figure_dropped",
+                f"figure_with_table={figure_with_table} but no table in md",
+            )
+
+    # 源文档没有表格：Enrich 也该没有，直接满分
+    if extract_count == 0 and not tables:
         return RuleResult("table", 100.0, False, None, "no table")
 
-    # 是否存在降级警告
-    warnings: list[dict[str, Any]] = ctx.warnings
-    # complex_table_damaged：复杂表格（score>10）但未以 image 输出
+    # -- (b) 保留率 ---------------------------------------------------------
+    enrich_count = len(tables)
+    if extract_count > 0:
+        retention = min(1.0, enrich_count / extract_count)
+        if retention < 0.80:
+            return RuleResult(
+                "table",
+                retention * 100,
+                False,
+                "table_retention_low",
+                f"enrich={enrich_count}/{extract_count}",
+            )
+
+    # 没有 tables artifact 直接返回；下面检查都基于 artifact
+    if not tables:
+        return RuleResult("table", 100.0, False, None, "no enrich tables")
+
+    # -- (c) 复杂表格未走图片降级 -------------------------------------------
     damaged = 0
     for t in tables:
         score = int(t.get("complexity", 0))
@@ -166,7 +221,6 @@ def _rule_table(ctx: Context) -> RuleResult:
         if score > 10 and mode != "image":
             damaged += 1
     if damaged > 0:
-        # 只有当存在专门 warning 时才算 critical
         return RuleResult(
             "table",
             60.0,
@@ -175,7 +229,8 @@ def _rule_table(ctx: Context) -> RuleResult:
             f"damaged={damaged}",
         )
 
-    # markdown_fallback warning 比例
+    # -- (d) markdown 转换失败 fallback 过多 --------------------------------
+    warnings: list[dict[str, Any]] = ctx.warnings
     fallback = sum(1 for w in warnings if w.get("code") == "table_markdown_fallback")
     if fallback > 0 and fallback / len(tables) > 0.5:
         return RuleResult(
@@ -189,14 +244,71 @@ def _rule_table(ctx: Context) -> RuleResult:
 
 
 def _rule_formula(ctx: Context) -> RuleResult:
-    """公式保留率：以 Enrich 统计为准。"""
+    """公式质量：保留率 + 乱码 + 公式-当-表格。
+
+    - latex_source_missing：mode=latex 但 latex 字段为空的比例过高。
+    - formula_mathml_garbage：md 中同一公式块同时出现 LaTeX 反斜杠命令与
+      MathML Unicode 数学字母（U+1D400–U+1D7FF / ℝ ℕ ℤ 等 U+2100 段）。
+    - formula_as_table：md 表格行内包含典型 LaTeX 命令（\\displaystyle、
+      \\mathbf、\\bm、\\tag 等）→ 公式被误判为 markdown 表格。
+    - 兜底：formula_retention_low（mode != latex 且无 mathml 的比例）。
+    """
     formulas = []
     if ctx.enrich:
         formulas = ctx.enrich.get("formulas", [])
+
+    md = ""
+    if ctx.emit and ctx.emit.get("markdown_text"):
+        md = ctx.emit["markdown_text"]
+
+    # -- (a) formula_as_table：最优先，因为这是"完全错类型"的严重 bug ------
+    fat_count = _count_formula_as_table(md)
+    if fat_count > 0:
+        return RuleResult(
+            "formula",
+            30.0,
+            True,
+            "formula_as_table",
+            f"suspicious_table_rows={fat_count}",
+        )
+
+    # -- (b) formula_mathml_garbage：每条公式块内 LaTeX + MathML Unicode 共存
+    garbage_blocks = _count_formula_garbage_blocks(md)
+    if garbage_blocks > 0:
+        # 单块乱码即扣至阈值以下；多块加重处罚并升 critical。
+        score = max(0.0, 65.0 - (garbage_blocks - 1) * 15.0)
+        is_critical = garbage_blocks >= 3
+        return RuleResult(
+            "formula",
+            score,
+            is_critical,
+            "formula_mathml_garbage",
+            f"garbage_blocks={garbage_blocks}",
+        )
+
     if not formulas:
-        # 无公式不是问题
         return RuleResult("formula", 100.0, False, None, "no formula")
 
+    # -- (c) latex_source_missing ------------------------------------------
+    latex_total = sum(1 for f in formulas if f.get("mode") == "latex")
+    latex_empty = sum(
+        1
+        for f in formulas
+        if f.get("mode") == "latex" and not (f.get("latex") or "").strip()
+    )
+    if latex_total > 0:
+        empty_ratio = latex_empty / latex_total
+        if empty_ratio > 0.15:
+            score = (1.0 - empty_ratio) * 100
+            return RuleResult(
+                "formula",
+                score,
+                False,
+                "latex_source_missing",
+                f"empty={latex_empty}/{latex_total}",
+            )
+
+    # -- (d) formula_retention_low (既有逻辑保留) --------------------------
     unknown = sum(1 for f in formulas if f.get("mode") != "latex" and not f.get("mathml"))
     total = len(formulas)
     ok = total - unknown
@@ -210,6 +322,66 @@ def _rule_formula(ctx: Context) -> RuleResult:
             f"ok={ok}/{total}",
         )
     return RuleResult("formula", retention * 100, False, None, f"ok={ok}/{total}")
+
+
+# ---------------------------------------------------------------------------
+# 公式 markdown 扫描 helpers
+# ---------------------------------------------------------------------------
+
+# 典型 LaTeX 控制命令（白名单匹配，避免英文正文里的 \ 误命中）。
+_LATEX_CMD_RE = re.compile(
+    r"\\(?:displaystyle|mathbf|mathbb|mathcal|mathrm|mathit|text|bm|nabla|tag|"
+    r"left|right|frac|sum|prod|int|sqrt|times|geq|leq|infty|propto|partial|"
+    r"qquad|quad|alpha|beta|gamma|theta|lambda|mu|sigma|pi|omega|forall|exists|"
+    r"approx|equiv|sim|in|notin|subset|mathscr|Delta|Omega|Sigma)\b"
+)
+
+# MathML Unicode 数学字母（bold/italic/calligraphy blocks）；ℝ ℂ 𝑥 𝐖 等。
+_MML_UNICODE_RE = re.compile(
+    "[\U0001D400-\U0001D7FF"  # Mathematical Alphanumeric Symbols
+    "\u2102\u210D\u2115\u2119\u211A\u211D\u2124"  # ℂ ℍ ℕ ℙ ℚ ℝ ℤ
+    "\u2202"  # ∂ partial
+    "]"
+)
+
+
+def _count_formula_garbage_blocks(md: str) -> int:
+    """扫描 $$...$$ / $...$ 公式块，同时含 LaTeX 命令 + MathML Unicode 判为乱码。"""
+    if not md:
+        return 0
+    count = 0
+    # 块级 $$...$$
+    for block in re.findall(r"\$\$(.+?)\$\$", md, flags=re.DOTALL):
+        if _LATEX_CMD_RE.search(block) and _MML_UNICODE_RE.search(block):
+            count += 1
+    # 行内 $...$（排除 $$）：只抓形如 "$...$" 最短匹配
+    for inline in re.findall(r"(?<!\$)\$([^$\n]{3,})\$(?!\$)", md):
+        if _LATEX_CMD_RE.search(inline) and _MML_UNICODE_RE.search(inline):
+            count += 1
+    return count
+
+
+# markdown 表格行：以 '|' 开头 '|' 结尾的一行
+_MD_TABLE_ROW_RE = re.compile(r"(?m)^\s*\|.+\|\s*$")
+
+
+def _count_formula_as_table(md: str) -> int:
+    """统计 markdown 表格行中含典型 LaTeX 命令的行数。
+
+    正常情形下表格里**可以**有 `$...$` 内嵌公式，所以必须同时满足两个条件才判
+    为"公式被当表格"：
+      1) 行内含 LaTeX 控制命令（\\mathbf / \\bm / \\displaystyle ...）；
+      2) 行内不包含 `$` 定界符 —— 即 LaTeX 源被裸写在单元格里。
+    """
+    if not md:
+        return 0
+    count = 0
+    for row in _MD_TABLE_ROW_RE.findall(md):
+        if "$" in row:
+            continue
+        if _LATEX_CMD_RE.search(row):
+            count += 1
+    return count
 
 
 def _rule_link_reference(ctx: Context) -> RuleResult:

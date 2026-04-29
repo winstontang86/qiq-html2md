@@ -17,6 +17,7 @@
 from __future__ import annotations
 
 import hashlib
+import re
 import time
 from typing import Any, Literal
 from urllib.parse import urljoin, urlparse
@@ -213,15 +214,26 @@ def _process_formulas(
     """提取公式并打锚点。
 
     识别顺序：
+    - arXiv/LaTeXML 的公式包装 `<table class="ltx_equation|ltx_equationgroup|ltx_eqn_table">`：
+      整张表格是一个公式块（可能含行号 `(1)` 等），将其替换为公式锚点节点，
+      避免后续 `_process_tables` 误识别。
     - `<math>` 节点（MathML）；内部可能含 `<annotation encoding="application/x-tex">` → LaTeX。
     - `<mjx-container>` / `<span class="math">` / `script[type="math/tex"]` —— MathJax/KaTeX。
     """
     formulas: list[dict[str, Any]] = []
     warnings: list[dict[str, Any]] = []
 
+    # 0) arxiv/LaTeXML：<table class="ltx_equation..."> 公式包装
+    #    需要在 `<math>` 扫描之前处理，否则内部 math 节点会先被 2) 号规则拿走锚点。
+    _process_latex_equation_tables(soup, formulas, warnings, mode)
+
     # 1) <math> —— MathML 原生节点
     for m in soup.find_all("math"):
         if not isinstance(m, Tag):
+            continue
+        # 已被公式容器处理过的 math（equation table 内部）会被整体替换掉，这里查不到；
+        # 若意外还有锚点（例如上游已打过），跳过。
+        if m.get(ANCHOR_ATTR):
             continue
         latex = _find_tex_annotation(m)
         is_block = str_attr(m, "display").lower() == "block"
@@ -295,14 +307,144 @@ def _process_formulas(
 
 
 def _find_tex_annotation(math: Tag) -> str | None:
-    """从 <math> 中找 <annotation encoding="application/x-tex">。"""
+    """从 <math> 中找 LaTeX 源，优先顺序：
+    1. <annotation encoding="application/x-tex">（MathML semantics 块）；
+    2. <math alttext="...">（LaTeXML/arxiv 常用，直接把 LaTeX 放属性里）。
+    """
     for ann in math.find_all("annotation"):
         if not isinstance(ann, Tag):
             continue
         enc = str_attr(ann, "encoding").lower()
         if "tex" in enc:
             txt = ann.get_text() or ""
-            return txt.strip() or None
+            txt = txt.strip()
+            if txt:
+                return txt
+    # 回退：math 的 alttext 属性
+    alt = str_attr(math, "alttext").strip()
+    return alt or None
+
+
+# arxiv / LaTeXML 等式包装的 CSS 类集合
+_LATEX_EQ_CLASSES: tuple[str, ...] = (
+    "ltx_equation",
+    "ltx_equationgroup",
+    "ltx_eqn_table",
+)
+
+
+def _is_latex_equation_table(tag: Tag) -> bool:
+    if tag.name != "table":
+        return False
+    cls = class_str(tag).lower()
+    return any(k in cls for k in _LATEX_EQ_CLASSES)
+
+
+def _process_latex_equation_tables(
+    soup: BeautifulSoup,
+    formulas: list[dict[str, Any]],
+    warnings: list[dict[str, Any]],
+    mode: str,
+) -> None:
+    """把 arxiv/LaTeXML 的 equation / equationgroup 表格整体替换为公式锚点节点。
+
+    行为：
+    - 若表格里是 **单一** `<math>`：直接作为一条 latex/mathml 公式；
+      自动探测同一 tr 内的等式编号（形如 `(1)`），附加到 LaTeX 末尾的 `\tag{...}`（可选）。
+    - 若表格里有 **多个** `<math>`（equationgroup，每行一个）：每个 math 成为一条独立公式，
+      在 DOM 里用一个 `<div>` 容器承载，每条公式放在自己的 `<div data-h2m-id="...">` 里，
+      这样 Emit 会把它们当独立 block 输出。
+    - 这些 equation table 都会从 DOM 中移除（replace_with）。
+    """
+    # 使用 list() 固化，迭代中会删除节点
+    for tbl in list(soup.find_all("table")):
+        if not isinstance(tbl, Tag):
+            continue
+        if not _is_latex_equation_table(tbl):
+            continue
+
+        # 收集表内的 math 节点（按文档顺序），以及每行的等式编号
+        rows_info: list[dict[str, Any]] = []
+        for tr in tbl.find_all("tr"):
+            if not isinstance(tr, Tag):
+                continue
+            math_nodes: list[Tag] = [m for m in tr.find_all("math") if isinstance(m, Tag)]
+            if not math_nodes:
+                continue
+            tag_num = _detect_equation_number(tr)
+            rows_info.append({"math": math_nodes, "tag": tag_num})
+
+        if not rows_info:
+            # 没有 math 的 equation table（极端情况）：直接清除，避免污染表格列表
+            tbl.decompose()
+            continue
+
+        # 每个 math 对应一条公式；公式块全部替换到一个容器 div 里
+        container = soup.new_tag("div")
+        container.attrs["data-h2m-eqblock"] = "1"
+
+        for row in rows_info:
+            row_tag_num: str | None = row.get("tag")
+            for m in row["math"]:
+                latex = _find_tex_annotation(m)
+                fid = f"f{len(formulas) + 1:03d}"
+                # 等式表格内一律按 block 渲染（display 属性有时为 inline，但实际是展示式）
+                is_block = True
+
+                if mode == "mathml" or (mode != "latex" and not latex):
+                    mathml = str(m)
+                    formulas.append(
+                        {
+                            "id": fid,
+                            "mode": "mathml",
+                            "inline": False,
+                            "mathml": mathml,
+                            "equation_number": row_tag_num,
+                        }
+                    )
+                else:
+                    tex = latex or ""
+                    if row_tag_num and tex and r"\tag" not in tex:
+                        tex = f"{tex} \\tag{{{row_tag_num}}}"
+                    formulas.append(
+                        {
+                            "id": fid,
+                            "mode": "latex",
+                            "inline": False,
+                            "latex": tex,
+                            "equation_number": row_tag_num,
+                        }
+                    )
+                    if not latex:
+                        warnings.append({"code": "formula_latex_missing", "id": fid})
+
+                # 构造占位节点供 Emit 走 artifact 渲染（不放 math，避免下游 2) 规则再次处理）
+                placeholder = soup.new_tag("div")
+                placeholder.attrs[ANCHOR_ATTR] = fid
+                placeholder.attrs["data-h2m-kind"] = "formula"
+                container.append(placeholder)
+                _ = is_block  # 保留变量以供将来扩展
+
+        tbl.replace_with(container)
+
+
+_EQ_NUM_RE = re.compile(r"^\s*\(\s*(\d+[a-zA-Z]?)\s*\)\s*$")
+
+
+def _detect_equation_number(tr: Tag) -> str | None:
+    """在等式行中找形如 ``(1)`` 的编号单元格（通常是右侧的 eqn_cell）。"""
+    for cell in tr.find_all(["td", "th"]):
+        if not isinstance(cell, Tag):
+            continue
+        # 若单元格内还有 math 节点，它不是"编号"单元格
+        if cell.find("math"):
+            continue
+        text = cell.get_text(" ", strip=True)
+        if not text:
+            continue
+        m = _EQ_NUM_RE.match(text)
+        if m:
+            return m.group(1)
     return None
 
 
@@ -395,14 +537,16 @@ def _table_complexity(table: Tag) -> int:
 
 
 def _choose_table_mode(requested: str, score: int) -> str:
-    """按架构文档 §6.2 映射。"""
+    """按架构文档 §6.2 映射。
+
+    auto 下优先尝试 Markdown（_table_to_markdown 本身会对 rowspan/colspan/nested 返回
+    None 自动回落到 html），只有当复杂度非常高时才直接走图片降级。
+    """
     if requested in ("markdown", "html", "image"):
         return requested
     # auto
-    if score <= 3:
-        return "markdown"
     if score <= 10:
-        return "html"
+        return "markdown"
     return "image"
 
 
@@ -419,12 +563,25 @@ def _table_to_markdown(table: Tag) -> str | None:
     rows: list[list[str]] = []
     header: list[str] | None = None
 
-    # thead
+    # thead：任一 cell 含 rowspan/colspan 或 thead 行数>1（多级表头）都判定为复杂表格
     thead = table.find("thead")
     if isinstance(thead, Tag):
-        header_row = thead.find("tr")
-        if isinstance(header_row, Tag):
-            header = [_cell_text(c) for c in header_row.find_all(["th", "td"]) if isinstance(c, Tag)]
+        thead_trs = [t for t in thead.find_all("tr") if isinstance(t, Tag)]
+        if len(thead_trs) > 1:
+            # 多级表头 Markdown 不支持（强制回落 html）
+            return None
+        if thead_trs:
+            header_row = thead_trs[0]
+            for c in header_row.find_all(["th", "td"]):
+                if not isinstance(c, Tag):
+                    continue
+                if int_attr(c, "rowspan", 1) > 1 or int_attr(c, "colspan", 1) > 1:
+                    return None
+            header = [
+                _cell_text(c)
+                for c in header_row.find_all(["th", "td"])
+                if isinstance(c, Tag)
+            ]
 
     body_rows: list[Any] = []
     tbody = table.find("tbody")
@@ -468,7 +625,41 @@ def _table_to_markdown(table: Tag) -> str | None:
 
 
 def _cell_text(cell: Tag) -> str:
-    return " ".join(cell.get_text(" ", strip=True).split())
+    """抽取单元格文本；对含 <math> 的单元格优先使用 LaTeX 源，避免 MathML 的
+    Unicode fallback + TeX annotation 双写导致乱码。
+    """
+    # 若单元格没有 math，走原来的纯文本路径
+    if not cell.find("math"):
+        return " ".join(cell.get_text(" ", strip=True).split())
+
+    # 有 math：克隆一份再逐个 math 替换为 `$...$` / `$$...$$`
+    # （这里直接在原 cell 上替换无副作用——单元格本身已经被纳入 table artifact）
+    buf_parts: list[str] = []
+    for c in cell.children:
+        buf_parts.append(_inline_cell_piece(c))
+    text = " ".join(p for p in buf_parts if p)
+    return " ".join(text.split())
+
+
+def _inline_cell_piece(node: Any) -> str:
+    if isinstance(node, NavigableString):
+        return str(node)
+    if not isinstance(node, Tag):
+        return ""
+    name = node.name.lower()
+    if name == "math":
+        latex = _find_tex_annotation(node)
+        is_block = str_attr(node, "display").lower() == "block"
+        if latex:
+            tex = latex.strip()
+            return f"$${tex}$$" if is_block else f"${tex}$"
+        # 无 LaTeX 源：保留 MathML 原样（Markdown 允许内嵌 HTML）
+        return str(node)
+    # 其他行内元素：递归拼接
+    parts: list[str] = []
+    for c in node.children:
+        parts.append(_inline_cell_piece(c))
+    return " ".join(p for p in parts if p)
 
 
 def _escape_md_cell(s: str) -> str:
