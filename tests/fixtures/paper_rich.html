@@ -1,0 +1,104 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Paper With Tables Formulas Figures And Refs</title>
+  <meta name="description" content="Fixture for stage-two features.">
+  <meta name="author" content="Alice">
+</head>
+<body>
+  <header>
+    <nav><a href="/">Home</a></nav>
+  </header>
+
+  <article>
+    <h1>Paper With Tables Formulas Figures And Refs</h1>
+    <p>Alice — April 2026</p>
+
+    <h2>Abstract</h2>
+    <p>
+      This fixture exercises figure/figcaption, simple tables, inline and block formulas
+      (both with LaTeX annotations and MathML-only), and a references section. It is
+      deliberately verbose to ensure the extracted text length clears the quality threshold.
+    </p>
+
+    <h2>1. Introduction</h2>
+    <p>
+      Inline math like the Pythagorean identity
+      <math display="inline">
+        <semantics>
+          <mrow><msup><mi>a</mi><mn>2</mn></msup><mo>+</mo><msup><mi>b</mi><mn>2</mn></msup><mo>=</mo><msup><mi>c</mi><mn>2</mn></msup></mrow>
+          <annotation encoding="application/x-tex">a^2 + b^2 = c^2</annotation>
+        </semantics>
+      </math>
+      appears in the middle of a paragraph. Block math is set off as:
+    </p>
+
+    <math display="block">
+      <semantics>
+        <mrow><mi>E</mi><mo>=</mo><mi>m</mi><msup><mi>c</mi><mn>2</mn></msup></mrow>
+        <annotation encoding="application/x-tex">E = m c^{2}</annotation>
+      </semantics>
+    </math>
+
+    <p>
+      We also include a MathML-only formula without LaTeX annotation, which the system
+      should preserve as MathML:
+    </p>
+
+    <math display="block">
+      <mrow><msubsup><mo>&#x222B;</mo><mn>0</mn><mn>1</mn></msubsup><msup><mi>x</mi><mn>2</mn></msup><mo>d</mo><mi>x</mi></mrow>
+    </math>
+
+    <h2>2. Architecture diagram</h2>
+    <figure>
+      <img src="https://example.invalid/figure1.png" alt="Overview of the pipeline" />
+      <figcaption>Figure 1: End-to-end pipeline diagram.</figcaption>
+    </figure>
+
+    <h2>3. Experimental results</h2>
+    <p>The benchmark numbers are summarized below.</p>
+    <table>
+      <caption>Table 1: Accuracy comparison.</caption>
+      <thead>
+        <tr><th>Model</th><th>Top-1</th><th>Top-5</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>BaselineNet</td><td>70.1</td><td>89.5</td></tr>
+        <tr><td>Ours</td><td>82.4</td><td>95.3</td></tr>
+      </tbody>
+    </table>
+
+    <h2>4. Complex table</h2>
+    <p>The following table uses rowspan and should fall back to HTML:</p>
+    <table>
+      <thead>
+        <tr><th rowspan="2">Group</th><th colspan="2">Metric</th></tr>
+        <tr><th>F1</th><th>AUC</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>A</td><td>0.91</td><td>0.95</td></tr>
+        <tr><td>B</td><td>0.88</td><td>0.92</td></tr>
+      </tbody>
+    </table>
+
+    <h2>5. Discussion</h2>
+    <p>
+      Section discussion. We analyze failure modes and scaling trends. Additional paragraphs
+      of meaningful content would follow in a real paper, exploring implications across
+      domains and laying out future directions.
+    </p>
+
+    <section class="ltx_bibliography">
+      <h2>References</h2>
+      <ol>
+        <li>Alice et al., <em>Paper One</em>, NeurIPS 2024.</li>
+        <li>Bob et al., <em>Paper Two</em>, ICML 2025.</li>
+        <li>Carol et al., <em>Paper Three</em>, ACL 2025.</li>
+      </ol>
+    </section>
+  </article>
+
+  <footer>© 2026</footer>
+</body>
+</html>

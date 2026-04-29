@@ -1,0 +1,43 @@
+name: html2md
+version: 0.1.0
+description: 面向论文类 HTML 页面的高保真 Markdown 转换 skill
+entry: python -m html2md_skill
+timeout_default_seconds: 600
+timeout_max_seconds: 600
+
+inputs_schema: schemas/request.schema.json
+outputs_schema: schemas/response.schema.json
+
+permissions:
+  network:
+    allow_protocols: [http, https]
+    deny_hosts_cidr:
+      - 127.0.0.0/8
+      - 10.0.0.0/8
+      - 172.16.0.0/12
+      - 192.168.0.0/16
+      - 169.254.0.0/16
+      - ::1/128
+      - fc00::/7
+    max_redirects: 5
+    max_response_bytes: 52428800
+  filesystem:
+    write_within: ["${output_dir}"]
+    sandbox: strict
+  browser:
+    engine: chromium
+    isolated_context: true
+    allow_download: false
+    optional: true
+
+observability:
+  diag_dir: "${output_dir}/_diag"
+  debug_default: lite
+  metrics_file: "${output_dir}/_diag/metrics.json"
+
+tags:
+  - html
+  - markdown
+  - paper
+  - document
+  - extraction

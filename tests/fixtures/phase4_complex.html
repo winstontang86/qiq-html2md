@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Phase Four Fixture</title>
+  <meta name="description" content="Tests screenshot fallback, inline SVG, sourceless formulas.">
+</head>
+<body>
+<article>
+  <h1>Phase Four Fixture</h1>
+
+  <h2>Abstract</h2>
+  <p>
+    This fixture exercises fall-backs added in phase four:
+    complex tables that must be screenshot, sourceless MathML formulas,
+    inline SVG diagrams, and adapter-based body selection.
+    The prose is intentionally verbose so that the quality evaluator
+    clears the text threshold even when image artifacts dominate.
+  </p>
+
+  <h2>1. Complex table (should fall back to screenshot)</h2>
+  <p>
+    The following table includes nested tables and many rowspans,
+    pushing complexity score above 10.
+  </p>
+  <table>
+    <caption>Table 1: Hierarchical metrics.</caption>
+    <thead>
+      <tr><th rowspan="2">Group</th><th colspan="3">Macro</th><th rowspan="2">Notes</th></tr>
+      <tr><th>Precision</th><th>Recall</th><th>F1</th></tr>
+    </thead>
+    <tbody>
+      <tr><td rowspan="2">A</td><td>0.91</td><td>0.90</td><td>0.905</td>
+        <td><table><tr><td>sub</td><td>value</td></tr></table></td>
+      </tr>
+      <tr><td>0.92</td><td>0.93</td><td>0.925</td><td>cv stable</td></tr>
+      <tr><td>B</td><td>0.88</td><td>0.86</td><td>0.870</td>
+        <td><img src="https://example.invalid/note.png" alt="marker"/></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <h2>2. Sourceless MathML formula</h2>
+  <p>Inline scalar formula without any TeX annotation:</p>
+  <math display="block">
+    <mrow><mfrac><mi>a</mi><mi>b</mi></mfrac></mrow>
+  </math>
+
+  <p>Below is a MathJax-rendered placeholder that has no source (typical aftermath when JS has run):</p>
+  <mjx-container jax="CHTML" display="true"></mjx-container>
+
+  <h2>3. Inline SVG diagram</h2>
+  <svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 120 60" width="120" height="60" aria-label="flow diagram">
+    <rect x="2" y="2" width="40" height="40" fill="none" stroke="black" />
+    <rect x="78" y="2" width="40" height="40" fill="none" stroke="black" />
+    <line x1="42" y1="22" x2="78" y2="22" stroke="black" />
+    <text x="22" y="28" text-anchor="middle">A</text>
+    <text x="98" y="28" text-anchor="middle">B</text>
+  </svg>
+
+  <h2>4. Discussion</h2>
+  <p>
+    These constructs jointly stress the enrich stage: table complexity
+    triggers image fallback, formula lacking TeX source also needs a
+    screenshot, and inline SVG is preserved as-is. Additional prose here
+    ensures the quality evaluator sees enough textual content.
+  </p>
+  <p>
+    We repeat: complex tables screenshot fallback, sourceless formula
+    screenshot fallback, inline SVG inline preservation. This is a phase
+    four regression artefact.
+  </p>
+
+  <section class="ltx_bibliography">
+    <h2>References</h2>
+    <ol>
+      <li>Phase Four Fixture, 2026.</li>
+    </ol>
+  </section>
+</article>
+</body>
+</html>

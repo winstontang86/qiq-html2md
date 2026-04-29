@@ -1,0 +1,52 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/html2md/response.schema.json",
+  "title": "SkillResponse",
+  "type": "object",
+  "required": ["status", "trace_id", "warnings_path", "diag_dir"],
+  "additionalProperties": true,
+  "properties": {
+    "status": {
+      "type": "string",
+      "enum": ["passed", "degraded", "failed"]
+    },
+    "trace_id": { "type": "string" },
+    "artifact": {
+      "type": "object",
+      "properties": {
+        "markdown_path": { "type": ["string", "null"] },
+        "assets_dir": { "type": ["string", "null"] }
+      }
+    },
+    "metadata_path": { "type": ["string", "null"] },
+    "quality_report_path": { "type": ["string", "null"] },
+    "warnings_path": { "type": "string" },
+    "diag_dir": { "type": "string" },
+    "stats": {
+      "type": "object",
+      "properties": {
+        "duration_ms": { "type": "integer", "minimum": 0 },
+        "retries": { "type": "integer", "minimum": 0 }
+      }
+    },
+    "risk_level": {
+      "type": "string",
+      "enum": ["low", "medium", "high"]
+    },
+    "events_tail": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "properties": {
+          "ts": { "type": "string" },
+          "trace_id": { "type": "string" },
+          "span_id": { "type": ["string", "null"] },
+          "stage": { "type": "string" },
+          "seq": { "type": "integer" },
+          "name": { "type": "string" },
+          "payload": { "type": "object" }
+        }
+      }
+    }
+  }
+}

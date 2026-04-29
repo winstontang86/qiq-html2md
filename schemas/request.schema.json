@@ -1,0 +1,77 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "$id": "https://example.com/html2md/request.schema.json",
+  "title": "SkillRequest",
+  "type": "object",
+  "required": ["url"],
+  "additionalProperties": false,
+  "properties": {
+    "url": {
+      "type": "string",
+      "format": "uri",
+      "description": "必填，待处理页面 URL（http/https）"
+    },
+    "output_dir": {
+      "type": "string",
+      "default": "./output",
+      "description": "输出目录；受 fs_sandbox 约束"
+    },
+    "timeout_seconds": {
+      "type": "integer",
+      "minimum": 1,
+      "maximum": 600,
+      "default": 600
+    },
+    "render_mode": {
+      "type": "string",
+      "enum": ["auto", "static", "browser"],
+      "default": "auto"
+    },
+    "table_mode": {
+      "type": "string",
+      "enum": ["auto", "markdown", "html", "image"],
+      "default": "auto"
+    },
+    "formula_mode": {
+      "type": "string",
+      "enum": ["auto", "latex", "mathml", "image"],
+      "default": "auto"
+    },
+    "image_mode": {
+      "type": "string",
+      "enum": ["download", "link", "both"],
+      "default": "download"
+    },
+    "quality_check": {
+      "type": "boolean",
+      "default": true
+    },
+    "max_retry": {
+      "type": "integer",
+      "minimum": 0,
+      "maximum": 5,
+      "default": 2
+    },
+    "include_references": {
+      "type": "boolean",
+      "default": true
+    },
+    "include_metadata": {
+      "type": "boolean",
+      "default": true
+    },
+    "debug": {
+      "type": "string",
+      "enum": ["lite", "full"],
+      "default": "lite"
+    },
+    "preserve_intermediate": {
+      "type": "boolean",
+      "default": false
+    },
+    "idempotency_key": {
+      "type": ["string", "null"],
+      "default": null
+    }
+  }
+}

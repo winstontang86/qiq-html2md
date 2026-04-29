@@ -1,0 +1,91 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <title>Efficient Retrieval-Augmented Summarization of Academic Papers</title>
+  <meta name="description" content="We propose a novel retrieval-augmented summarization framework for scholarly documents.">
+  <meta name="author" content="Jane Doe">
+  <meta name="author" content="John Smith">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="/">Home</a> | <a href="/papers">Papers</a>
+    </nav>
+  </header>
+
+  <article>
+    <h1>Efficient Retrieval-Augmented Summarization of Academic Papers</h1>
+    <p class="authors">Jane Doe, John Smith — April 2026</p>
+
+    <h2>Abstract</h2>
+    <p>
+      We present a retrieval-augmented summarization method that significantly improves
+      factual consistency over standard encoder-decoder models. Extensive experiments
+      show a 12% ROUGE-L improvement on the arXiv-Summ benchmark while reducing the
+      latency by 35%.
+    </p>
+
+    <h2>1. Introduction</h2>
+    <p>
+      Automatic summarization of long scholarly documents remains an open challenge
+      due to the hierarchical structure of arguments, dense citations, and extensive
+      use of mathematical formulas. Recent retrieval-augmented generation models have
+      shown promising results in open-domain question answering, but their application
+      to academic summarization has been limited.
+    </p>
+    <p>
+      In this paper we introduce <strong>RAS-Paper</strong>, a hybrid architecture that
+      combines dense passage retrieval with a fine-tuned summarization decoder. Our
+      contributions are threefold:
+    </p>
+    <ul>
+      <li>A new retrieval index optimized for scholarly documents.</li>
+      <li>A two-stage training recipe that mitigates hallucination.</li>
+      <li>A systematic evaluation on four benchmark datasets.</li>
+    </ul>
+
+    <h2>2. Method</h2>
+    <p>
+      Our pipeline consists of three components: a retriever <em>R</em>, a re-ranker
+      <em>K</em>, and a summarizer <em>S</em>. Given an input paper <em>p</em>, we
+      first retrieve the top-<em>k</em> relevant passages from an indexed corpus,
+      then re-rank them using a cross-encoder, and finally generate the summary.
+    </p>
+
+    <figure>
+      <img src="/assets/figure1.png" alt="Architecture diagram of RAS-Paper" />
+      <figcaption>Figure 1: RAS-Paper architecture.</figcaption>
+    </figure>
+
+    <h2>3. Experiments</h2>
+    <p>We evaluate on four benchmarks: arXiv-Summ, PubMed, BigPatent, and GovReport.</p>
+
+    <h3>3.1 Datasets</h3>
+    <ol>
+      <li>arXiv-Summ — 215k pairs.</li>
+      <li>PubMed — 133k pairs.</li>
+      <li>BigPatent — 1.3M pairs.</li>
+      <li>GovReport — 19k pairs.</li>
+    </ol>
+
+    <h2>4. Conclusion</h2>
+    <p>
+      We demonstrated that retrieval augmentation, when paired with careful training,
+      delivers substantial gains in both faithfulness and efficiency for academic
+      summarization.
+    </p>
+
+    <section class="ltx_bibliography">
+      <h2>References</h2>
+      <ol>
+        <li>Smith et al., <em>Neural Summarization at Scale</em>, NeurIPS 2024.</li>
+        <li>Doe et al., <em>Dense Retrieval for Long Documents</em>, ACL 2025.</li>
+      </ol>
+    </section>
+  </article>
+
+  <aside class="sidebar">Ads should be removed</aside>
+  <footer>© 2026 arxiv fixture</footer>
+</body>
+</html>

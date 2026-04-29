@@ -1,0 +1,71 @@
+# ---------- Python ----------
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+*.egg
+*.egg-info/
+build/
+dist/
+wheels/
+
+# ---------- 虚拟环境 / 包管理 ----------
+.venv/
+venv/
+env/
+# uv lock 文件需要提交；仅忽略其他 lock
+.pdm-python
+.pdm-build/
+
+# ---------- 测试/类型/静态检查缓存 ----------
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.pyre/
+.pytype/
+.coverage
+.coverage.*
+htmlcov/
+.tox/
+.nox/
+
+# ---------- IDE / 编辑器 ----------
+.idea/
+.vscode/
+*.swp
+*.swo
+*.code-workspace
+.project
+.settings/
+
+# ---------- CodeBuddy / WorkBuddy 类工具 ----------
+# CodeBuddy 本地插件/设置（每台机器独立，不应提交）
+.codebuddy/
+# WorkBuddy 跨会话记忆（本地文件，不进仓库）
+.workbuddy/
+# 以防未来衍生目录
+.cursor/
+.claude/
+.aider*
+
+# ---------- 操作系统 ----------
+.DS_Store
+Thumbs.db
+desktop.ini
+ehthumbs.db
+
+# ---------- 项目运行产物 ----------
+/output/
+/tmp/
+# Skill 运行的诊断包与缓存
+_diag/
+!tests/fixtures/**/_diag/
+.cache/
+# Playwright 浏览器二进制（用户本地装，不进仓）
+.ms-playwright/
+
+# ---------- 本地日志与 dump ----------
+*.log
+*.log.*
+.*.dump

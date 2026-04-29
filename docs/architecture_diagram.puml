@@ -1,0 +1,113 @@
+@startuml
+skinparam shadowing false
+skinparam defaultFontName "Microsoft YaHei"
+skinparam rectangle {
+  RoundCorner 12
+  BackgroundColor #F8FAFC
+  BorderColor #334155
+  FontColor #0F172A
+}
+skinparam package {
+  BackgroundColor #EEF2FF
+  BorderColor #6366F1
+  FontColor #1E1B4B
+}
+skinparam arrow {
+  Color #334155
+  FontColor #0F172A
+}
+
+title HTML 页面转 Markdown Skill 架构图 (v2-final r3 · 精简版)
+
+package "L1 · Skill 契约层" as L1 #EEEDFE {
+  rectangle "SKILL.md\nmanifest.yaml\nrequest/response schema" as Contract
+}
+
+package "L2 · 编排层" as L2 #E6F1FB {
+  rectangle "types.py\n(7 个核心数据类)" as Types
+  rectangle "pipeline.py\n主循环 + plan_retry()" as Pipeline
+  rectangle "context.py" as Context
+  rectangle "budget.py" as Budget
+  rectangle "errors.py\n(3 种异常)" as Errors
+}
+
+package "L3 · 管线层 (线性四 Stage)" as L3 #E1F5EE {
+  rectangle "Acquire\nfetcher + renderer\nadapter resolver" as Acquire
+  rectangle "Extract\nextractor + normalizer\nmetadata" as Extract
+  rectangle "Enrich\nassets + tables\nformulas + refs\n(只读 DOM 并发)" as Enrich
+  rectangle "Emit\nmarkdown_writer + packager\nquality" as Emit
+}
+
+package "Site Adapters" as Adapters #FAEEDA {
+  rectangle "base.py\n(DEFAULT + REGISTRY\n+ resolve)\narxiv · pmc · jats" as AdapterBox
+}
+
+rectangle "quality.py\n(规则 + 评分合一)" as QualityBox #FAEEDA
+
+package "L4 · Infra" as L4 #F1EFE8 {
+  rectangle "http\nfs_sandbox" as Infra
+}
+
+package "Observability" as OBS #FAEEDA {
+  rectangle "events\n(总线 + 落盘\n+ trace + snapshot sink)\nmetrics" as Obs
+}
+
+Contract --> Pipeline : SkillRequest
+Pipeline --> Acquire
+Acquire --> Extract
+Extract --> Enrich
+Enrich --> Emit
+Emit --> Pipeline : StageResult + QualityReport
+
+Pipeline <--> Context
+Pipeline <--> Budget
+Pipeline ..> Errors
+Pipeline ..> Types
+
+Acquire ..> AdapterBox
+Extract ..> AdapterBox
+Emit ..> QualityBox
+
+Acquire ..> Infra
+Extract ..> Infra
+Enrich ..> Infra
+Emit ..> Infra
+
+Pipeline --> Acquire : 局部重跑\n(plan_retry)
+Pipeline --> Extract : 局部重跑
+Pipeline --> Enrich : 局部重跑
+Pipeline --> Emit   : 局部重跑
+
+Obs ..> Pipeline : 贯穿四层
+Obs ..> L3
+Obs ..> Infra
+
+note right of Types
+  单一数据来源
+  7 个核心类：
+  SkillRequest/Response
+  Context · StageResult
+  RetryPlan · QualityReport
+  Event
+end note
+
+note right of Pipeline
+  重试决策内联为函数
+  无独立 FSM 类
+  attempts 计数即可
+end note
+
+note right of OBS
+  首版 6 核心事件
+  events.jsonl + metrics.json
+  stage.finished 自动镜像到
+  _diag/stages/<name>.json
+end note
+
+note right of Infra
+  首版不含
+  cache / browser_pool
+  阶段五再加
+end note
+
+@enduml
